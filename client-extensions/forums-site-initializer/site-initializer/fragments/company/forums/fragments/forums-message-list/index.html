@@ -25,6 +25,8 @@
 	data-label-views="${languageUtil.get(locale, "views")}"
 	data-label-all-categories="${languageUtil.get(locale, "all-categories")}"
 	data-label-subcategories="${languageUtil.get(locale, "subcategories")}"
+	data-label-expand="${languageUtil.get(locale, "expand")}"
+	data-label-collapse="${languageUtil.get(locale, "collapse")}"
 	data-label-showing="${languageUtil.get(locale, "showing-x-of-x-items")}">
 	<div class="panel-body">
 
@@ -59,10 +61,19 @@
 			</div>
 		</div>
 
-		<!-- Subcategories of the current category (hidden when there are none) -->
+		<!-- Subcategories of the current category (hidden when there are none).
+		     Collapsed to two rows; the toggle appears only when there are more. -->
 		<div class="forums-message-list__subcategories mb-4" id="forumsMessageListSubcategories" style="display:none;">
 			<h3 class="h5 text-dark mb-3">${languageUtil.get(locale, "subcategories")}</h3>
 			<div class="row" id="forumsMessageListSubcategoriesRow"></div>
+			<div class="text-center">
+				<button type="button" class="btn btn-sm btn-unstyled forums-message-list__subcategories-toggle" id="forumsMessageListSubcategoriesToggle" aria-controls="forumsMessageListSubcategoriesRow" aria-expanded="false" style="display:none;">
+					<span id="forumsMessageListSubcategoriesToggleLabel">${languageUtil.get(locale, "expand")}</span>
+					<svg class="lexicon-icon" id="forumsMessageListSubcategoriesToggleIcon" focusable="false" role="presentation">
+						<use href="${themeDisplay.getPathThemeImages()}/clay/icons.svg#angle-down"></use>
+					</svg>
+				</button>
+			</div>
 		</div>
 
 		<!-- Tab filters -->

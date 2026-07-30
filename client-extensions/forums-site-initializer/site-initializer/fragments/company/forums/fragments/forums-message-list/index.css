@@ -29,6 +29,52 @@
 	max-width: 320px;
 }
 
+/* Subcategories */
+.forums-message-list__subcategory-card {
+	margin-bottom: 0.5rem
+}
+
+.forums-message-list__subcategory-card .card-body {
+	padding: 0.5rem 1rem;
+}
+
+.forums-message-list__subcategory-title {
+	color: var(--body-color, #272833);
+	font-size: 0.9375rem;
+	margin-bottom: 0.25rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Two lines are reserved even when the description is short or absent, so
+   every card is the same height and the grid rows line up. */
+.forums-message-list__subcategory-desc {
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	display: -webkit-box;
+	line-height: 1.3125rem;
+	margin-bottom: 0;
+	min-height: 2.625rem;
+	overflow: hidden;
+}
+
+.forums-message-list__subcategory-col--hidden {
+	display: none;
+}
+
+.forums-message-list__subcategories-toggle {
+	align-items: center;
+	color: var(--primary, #0b5fff);
+	display: inline-flex;
+	gap: 0.25rem;
+}
+
+.forums-message-list__subcategories-toggle svg {
+	height: 12px;
+	width: 12px;
+}
+
 .forums-message-card .card-body {
 	padding: 1.25rem 1.5rem;
 }

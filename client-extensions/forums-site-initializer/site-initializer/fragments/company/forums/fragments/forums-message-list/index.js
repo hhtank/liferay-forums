@@ -56,6 +56,12 @@ if (messageList) {
 	var breadcrumbOl = messageList.querySelector('#forumsMessageListBreadcrumb');
 	var subcatsContainer = messageList.querySelector('#forumsMessageListSubcategories');
 	var subcatsRow = messageList.querySelector('#forumsMessageListSubcategoriesRow');
+	var subcatsToggle = messageList.querySelector('#forumsMessageListSubcategoriesToggle');
+	var subcatsToggleLabel = messageList.querySelector('#forumsMessageListSubcategoriesToggleLabel');
+	var subcatsToggleIcon = messageList.querySelector('#forumsMessageListSubcategoriesToggleIcon');
+
+	/* Collapsed subcategory box shows exactly two rows; expanded shows all */
+	var subcatsExpanded = false;
 
 	/* FK exposed by the ForumCategory self-relationship (0 / absent = top-level) */
 	var PARENT_FK = 'r_categorySubcategories_c_forumCategoryId';
@@ -327,6 +333,63 @@ if (messageList) {
 	   A parent lists only its OWN topics, so these cards are the way into
 	   subcategory content — hidden entirely when there are none, which keeps
 	   a flat forum looking exactly as it did before. */
+	/* Cards per row implied by the column classes below (sm/lg only, matching
+	   the rest of the fragment): 4 from lg up, 2 from sm up, 1 below. */
+	function subcategoryColumnsPerRow() {
+		if (window.matchMedia('(min-width: 992px)').matches) return 4;
+		if (window.matchMedia('(min-width: 576px)').matches) return 2;
+		return 1;
+	}
+
+	/* Two rows' worth of cards */
+	function subcategoryVisibleLimit() {
+		return subcategoryColumnsPerRow() * 2;
+	}
+
+	/* Hide everything past two rows and sync the toggle. Safe to re-run on
+	   resize; the expanded state is deliberately preserved. */
+	function applySubcategoryCollapse() {
+		if (!subcatsRow) return;
+
+		var cols = subcatsRow.children;
+		var limit = subcategoryVisibleLimit();
+		var overflows = cols.length > limit;
+
+		for (var i = 0; i < cols.length; i++) {
+			var hidden = !subcatsExpanded && overflows && i >= limit;
+			cols[i].classList.toggle('forums-message-list__subcategory-col--hidden', hidden);
+		}
+
+		if (!subcatsToggle) return;
+
+		subcatsToggle.style.display = overflows ? '' : 'none';
+
+		if (!overflows) {
+			/* Nothing hidden, so the row is fully exposed */
+			subcatsToggle.setAttribute('aria-expanded', 'true');
+			return;
+		}
+
+		subcatsToggle.setAttribute('aria-expanded', subcatsExpanded ? 'true' : 'false');
+
+		if (subcatsToggleLabel) {
+			subcatsToggleLabel.textContent = subcatsExpanded
+				? (messageList.dataset.labelCollapse || 'Collapse')
+				: (messageList.dataset.labelExpand || 'Expand');
+		}
+
+		if (subcatsToggleIcon) {
+			var use = subcatsToggleIcon.querySelector('use');
+			if (use) {
+				var href = use.getAttribute('href') || '';
+				use.setAttribute(
+					'href',
+					href.replace(/#angle-(down|up)$/, subcatsExpanded ? '#angle-up' : '#angle-down')
+				);
+			}
+		}
+	}
+
 	function renderSubcategories(tree) {
 		if (!subcatsContainer || !subcatsRow) return;
 		subcatsRow.innerHTML = '';
@@ -339,34 +402,58 @@ if (messageList) {
 
 		children.forEach(function(cat) {
 			var col = document.createElement('div');
-			col.className = 'col-sm-6 col-lg-4 mb-3';
+			col.className = 'col-sm-6 col-lg-3 mb-4';
 
 			var card = document.createElement('a');
 			card.href = categoryHref(cat.id);
-			card.className = 'card card-interactive card-interactive-secondary h-100 text-decoration-none';
+			card.className = 'card card-interactive card-interactive-secondary h-100 text-decoration-none forums-message-list__subcategory-card';
 
 			var body = document.createElement('div');
 			body.className = 'card-body';
 
 			var title = document.createElement('div');
-			title.className = 'card-title font-weight-semi-bold mb-1';
+			title.className = 'card-title font-weight-semi-bold forums-message-list__subcategory-title';
 			title.textContent = cat.categoryName || '';
+			title.title = cat.categoryName || '';
 			body.appendChild(title);
 
+			/* Always appended — an empty description still reserves its two
+			   lines so every card ends up the same height. */
+			var desc = document.createElement('p');
+			desc.className = 'card-text text-secondary small forums-message-list__subcategory-desc';
+			desc.textContent = cat.categoryDescription || '';
 			if (cat.categoryDescription) {
-				var desc = document.createElement('p');
-				desc.className = 'card-text text-secondary small mb-0';
-				desc.textContent = cat.categoryDescription;
-				body.appendChild(desc);
+				/* Clamped to two lines — expose the full text on hover */
+				desc.title = cat.categoryDescription;
+				desc.setAttribute('data-tooltip-align', 'top');
 			}
+			body.appendChild(desc);
 
 			card.appendChild(body);
 			col.appendChild(card);
 			subcatsRow.appendChild(col);
 		});
 
+		/* A freshly rendered box starts collapsed */
+		subcatsExpanded = false;
+		applySubcategoryCollapse();
+
 		subcatsContainer.style.display = '';
 	}
+
+	if (subcatsToggle) {
+		subcatsToggle.addEventListener('click', function() {
+			subcatsExpanded = !subcatsExpanded;
+			applySubcategoryCollapse();
+		});
+	}
+
+	/* Registered once: the number of visible cards depends on the breakpoint */
+	var subcatsResizeTimer = null;
+	window.addEventListener('resize', function() {
+		if (subcatsResizeTimer) clearTimeout(subcatsResizeTimer);
+		subcatsResizeTimer = setTimeout(applySubcategoryCollapse, 150);
+	});
 
 	/* One fetch drives the breadcrumb, the filter dropdown and the
 	   subcategory cards. */
