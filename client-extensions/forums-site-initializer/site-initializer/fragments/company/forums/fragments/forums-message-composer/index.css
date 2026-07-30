@@ -15,17 +15,23 @@
 
 .forums-message-composer__layout {
 	display: flex;
-	gap: 2rem;
+	flex-direction: column;
+	gap: 1rem;
 }
 
-.forums-message-composer__layout-left {
-	flex: 0 0 320px;
-}
-
+/* Editor first, attachments below it: a single-column reply, matching the page
+   composer. A fixed side column just for the attach button read as a large
+   empty gap next to the editor, and stacked it put attachments above the
+   reply. */
 .forums-message-composer__layout-right {
 	display: flex;
 	flex: 1;
 	flex-direction: column;
+	order: 1;
+}
+
+.forums-message-composer__layout-left {
+	order: 2;
 }
 
 .forums-message-composer__body-group {
@@ -36,17 +42,6 @@
 
 .forums-message-composer__editor-wrapper {
 	flex: 1;
-}
-
-@media (max-width: 767.98px) {
-	.forums-message-composer__layout {
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.forums-message-composer__layout-left {
-		flex: none;
-	}
 }
 
 /* Page mode: the composer is rendered full-screen as a single-column form
@@ -113,8 +108,8 @@
 /* @mention autocomplete dropdown. Appended to <body> and positioned as
    fixed at the caret, so it must sit above the modal (z-index > 1050). */
 .forums-mention-dropdown {
-	background: #fff;
-	border: 1px solid #e7e7ed;
+	background: var(--white, #fff);
+	border: 1px solid var(--secondary-l3, #e7e7ed);
 	border-radius: 0.25rem;
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	max-height: 15rem;
@@ -150,7 +145,7 @@
 }
 
 .forums-mention-dropdown__name {
-	color: #272833;
+	color: var(--body-color, #272833);
 	font-weight: 600;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -158,12 +153,12 @@
 }
 
 .forums-mention-dropdown__screen {
-	color: #6b6c7e;
+	color: var(--secondary, #6b6c7e);
 	font-size: 0.75rem;
 }
 
 .forums-mention-dropdown__empty {
-	color: #6b6c7e;
+	color: var(--secondary, #6b6c7e);
 	font-size: 0.875rem;
 	padding: 0.5rem 0.75rem;
 }

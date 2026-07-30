@@ -16,23 +16,7 @@
 							"fragmentFields": [],
 							"indexed": true
 						},
-						"pageElements": [
-							{
-								"definition": {},
-								"pageElements": [
-									{
-										"definition": {
-											"widgetInstance": {
-												"widgetConfig": {},
-												"widgetName": "com_liferay_portal_search_web_search_bar_portlet_SearchBarPortlet"
-											}
-										},
-										"type": "Widget"
-									}
-								],
-								"type": "FragmentDropZone"
-							}
-						],
+						"pageElements": [],
 						"type": "Fragment"
 					}
 				],

@@ -50,6 +50,7 @@ if (messageList) {
 	var searchBtn = messageList.querySelector('#forumsMessageListSearchBtn');
 	var tabLinks = messageList.querySelectorAll('#forumsMessageListTabs .nav-link');
 	var askBtn = messageList.querySelector('#forumsMessageListAskBtn');
+	var newDiscussionBaseUrl = askBtn ? askBtn.getAttribute('href') : '';
 	var categoryFilter = messageList.querySelector('#forumsMessageListCategoryFilter');
 	var showingEl = messageList.querySelector('#forumsMessageListShowing');
 
@@ -201,7 +202,7 @@ if (messageList) {
 		var level = PRIORITY_LEVELS[Math.round(parseFloat(priority)) || 0];
 		if (!level) return '';
 		var label = dataset[level.labelKey] || level.fallback;
-		return '<span class="forums-message-card__solved ' + level.textClass + ' ml-2" title="' + Liferay.Util.escapeHTML(label) + '">'
+		return '<span class="forums-message-card__solved ' + level.textClass + ' ml-3 small">'
 			+ '<svg class="lexicon-icon lexicon-icon-' + level.icon + '" role="presentation"><use href="' + clayIconsUrl + '#' + level.icon + '"></use></svg> '
 			+ Liferay.Util.escapeHTML(label) + '</span>';
 	}
@@ -316,6 +317,13 @@ if (messageList) {
 			if (askBtn) {
 				if (!isBanned && data.actions && (data.actions['post'] || data.actions['create'])) {
 					askBtn.style.display = '';
+
+					/* Carry the current category into New Discussion so the
+					   composer preselects it — no manual category pick when
+					   posting from within a category. */
+					askBtn.href = categoryId
+						? newDiscussionBaseUrl + '?categoryId=' + encodeURIComponent(categoryId)
+						: newDiscussionBaseUrl;
 				} else {
 					askBtn.style.display = 'none';
 				}
@@ -424,7 +432,7 @@ if (messageList) {
 				var solvedBadge = '';
 				if (msg.question && hasSolution) {
 					var solvedText = messageList.dataset.labelSolved || 'Solved';
-					solvedBadge = '<span class="forums-message-card__solved text-success font-weight-semi-bold ml-2">' + checkIcon + ' ' + solvedText + '</span>';
+					solvedBadge = '<span class="forums-message-card__solved text-success font-weight-semi-bold ml-3 small">' + checkIcon + ' ' + solvedText + '</span>';
 				}
 
 				var priorityBadgeHtml = priorityBadge(msg.priority, messageList.dataset);
@@ -438,7 +446,7 @@ if (messageList) {
 				var flaggedBadge = '';
 				if (isFlagged) {
 					var flaggedText = messageList.dataset.labelFlagged || 'Flagged';
-					flaggedBadge = '<span class="forums-message-card__solved text-danger ml-2"><svg class="lexicon-icon lexicon-icon-warning-full" role="presentation" viewBox="0 0 16 16" fill="currentColor"><path d="M16 14.5L8 1 0 14.5h16zM8 13c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm1-3H7V6h2v4z"/></svg> ' + flaggedText + '</span>';
+					flaggedBadge = '<span class="forums-message-card__solved text-danger ml-3 small"><svg class="lexicon-icon lexicon-icon-warning-full" role="presentation" viewBox="0 0 16 16" fill="currentColor"><path d="M16 14.5L8 1 0 14.5h16zM8 13c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm1-3H7V6h2v4z"/></svg> ' + flaggedText + '</span>';
 				}
 
 				html += '<div class="card forums-message-card">'

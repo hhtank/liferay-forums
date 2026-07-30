@@ -337,47 +337,6 @@ if (messageComposer) {
 		.catch(function(err) { console.error('Error checking ban status', err); });
 	}
 
-	function trackForumStatsUser() {
-		if (!Liferay.ThemeDisplay.isSignedIn()) return;
-		var userId = Liferay.ThemeDisplay.getUserId();
-		/* Object DateTime fields reject the milliseconds toISOString() emits,
-		   so trim to whole-second ISO 8601 (e.g. 2026-07-17T12:34:56Z). */
-		var lastPostDate = new Date().toISOString().split('.')[0] + 'Z';
-		Liferay.Util.fetch(portalURL + '/o/c/forumstatsusers/scopes/' + scopeGroupId + '?filter=' + encodeURIComponent("statsUserId eq " + userId), {
-			headers: headers,
-			method: 'GET'
-		})
-		.then(function(r) { return r.json(); })
-		.then(function(data) {
-			if (data.totalCount === 0) {
-				Liferay.Util.fetch(portalURL + '/o/c/forumstatsusers/scopes/' + scopeGroupId, {
-					headers: headers,
-					method: 'POST',
-					body: JSON.stringify({
-						statsUserId: parseInt(userId),
-						messageCount: 1,
-						lastPostDate: lastPostDate
-					})
-				}).catch(function(e) { console.error('Error creating ForumStatsUser', e); });
-			}
-			else {
-				/* Read-then-increment: not atomic, so rapid parallel posts can
-				   undercount. Acceptable for a display-only stat with no
-				   server-side action available. */
-				var stats = data.items[0];
-				Liferay.Util.fetch(portalURL + '/o/c/forumstatsusers/' + stats.id, {
-					headers: headers,
-					method: 'PATCH',
-					body: JSON.stringify({
-						messageCount: (stats.messageCount || 0) + 1,
-						lastPostDate: lastPostDate
-					})
-				}).catch(function(e) { console.error('Error updating ForumStatsUser', e); });
-			}
-		})
-		.catch(function(err) { console.error('Error tracking ForumStatsUser', err); });
-	}
-
 	/* ---- Tags Logic ---- */
 
 	function renderTags() {
@@ -832,7 +791,6 @@ if (messageComposer) {
 				})
 				.then(function(r) {
 					if (!r.ok) throw new Error('HTTP ' + r.status);
-					trackForumStatsUser();
 					return r.json();
 				})
 				.then(function(reply) { return uploadAttachments(reply && reply.id); })
@@ -889,7 +847,6 @@ if (messageComposer) {
 				})
 				.then(function(r) {
 					if (!r.ok) throw new Error('HTTP ' + r.status);
-					trackForumStatsUser();
 					return r.json();
 				})
 				.then(function(msg) {

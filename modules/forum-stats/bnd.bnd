@@ -1,0 +1,3 @@
+Bundle-Name: Forum Stats
+Bundle-SymbolicName: com.liferay.forum.stats.impl
+Bundle-Version: 1.0.0

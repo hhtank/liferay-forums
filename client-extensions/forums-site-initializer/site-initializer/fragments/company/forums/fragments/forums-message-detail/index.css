@@ -118,9 +118,6 @@ body.has-edit-mode-menu #forumsDetailReplyERC {
 	align-items: center;
 	display: flex;
 	gap: 0.75rem;
-}
-
-.forums-message-detail__author-info {
 	margin-bottom: 1.5rem;
 }
 
@@ -294,7 +291,7 @@ body.has-edit-mode-menu #forumsDetailReplyERC {
    (CKEditor 4). CKEditor 5 drops the span, leaving a bare "@screenName" text
    token that reads fine unstyled; the notification microservice resolves the
    visible token either way. */
-.forums-message-detail__body .lfr-ac-content,
+.forums-message-detail__post-body .lfr-ac-content,
 .forums-message-detail__reply-body .lfr-ac-content {
 	background: #f0f5ff;
 	border-radius: 0.25rem;

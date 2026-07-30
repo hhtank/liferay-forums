@@ -100,9 +100,18 @@
 						[#if heroDescriptionText?has_content]${heroDescriptionText}[#else]${languageUtil.get(locale, "forums-description")}[/#if]
 					</p>
 
-					<div class="forums-hero__drop-zone">
-						<lfr-drop-zone></lfr-drop-zone>
-					</div>
+					<form class="forums-hero__search input-group" role="search" action="${sitePrefix}/forums-messages" method="get">
+						<div class="input-group-item">
+							<input type="search" name="q" class="form-control input-group-inset input-group-inset-after" aria-label="${languageUtil.get(locale, "search", "Search")}" placeholder="${languageUtil.get(locale, "search", "Search")}...">
+							<div class="input-group-inset-item input-group-inset-item-after">
+								<button class="btn btn-unstyled" type="submit" aria-label="${languageUtil.get(locale, "search", "Search")}">
+									<svg class="lexicon-icon lexicon-icon-search" focusable="false" role="presentation">
+										<use href="${themeDisplay.getPathThemeImages()}/clay/icons.svg#search"></use>
+									</svg>
+								</button>
+							</div>
+						</div>
+					</form>
 
 					[#if showSolutions || showDiscussions || showMessages || showParticipants]
 						<div class="forums-hero__stats mb-4">

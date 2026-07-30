@@ -385,7 +385,7 @@ if (messageDetail) {
 		var level = PRIORITY_LEVELS[Math.round(parseFloat(priority)) || 0];
 		if (!level) return '';
 		var label = Liferay.Util.escapeHTML(messageDetail.dataset[level.labelKey] || level.fallback);
-		return '<span class="forums-message-detail__priority-badge ' + level.textClass + '" title="' + label + '">'
+		return '<span class="forums-message-detail__priority-badge ' + level.textClass + '">'
 			+ '<svg class="lexicon-icon lexicon-icon-' + level.icon + '" role="presentation"><use href="' + clayIconsUrl + '#' + level.icon + '"></use></svg> '
 			+ label + '</span>';
 	}

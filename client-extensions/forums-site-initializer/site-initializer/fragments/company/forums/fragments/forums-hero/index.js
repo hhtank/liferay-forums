@@ -129,7 +129,7 @@ if (topPosters) {
 					var name = displayName(creator) || (topPosters.dataset.labelUnknown || 'Unknown');
 					var count = stats.messageCount || 0;
 					var rank = showRank ? rankLabel(count) : '';
-					html += '<li class="forums-hero__card card card-interactive card-interactive-secondary">'
+					html += '<li class="forums-hero__card card">'
 						+ '<span class="forums-hero__position text-secondary">' + (idx + 1) + '</span>'
 						+ renderAvatar(creator)
 						+ '<span class="forums-hero__poster-name text-dark font-weight-semi-bold d-block">' + Liferay.Util.escapeHTML(name) + '</span>'
