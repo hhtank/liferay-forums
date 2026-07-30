@@ -462,5 +462,17 @@
 	{
 		"key": "no-users-found",
 		"value": "{\"en_US\": \"No users found\"}"
+	},
+	{
+		"key": "one-level-only",
+		"value": "{\"en_US\": \"one level only\"}"
+	},
+	{
+		"key": "category-with-subcategories-cannot-be-nested",
+		"value": "{\"en_US\": \"This category has subcategories, so it must stay top-level.\"}"
+	},
+	{
+		"key": "confirm-delete-category-with-subcategories",
+		"value": "{\"en_US\": \"This category has {0} subcategories. Deleting it will also delete them and all of their topics. This action cannot be reverted.\"}"
 	}
 ]

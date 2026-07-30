@@ -1,0 +1,22 @@
+{
+	"objectDefinitionSystem2": false,
+	"parameterObjectFieldName": "",
+	"parameterObjectFieldId": 0,
+	"label": {
+		"en_US": "Category Subcategories"
+	},
+	"reverse": false,
+	"type": "oneToMany",
+	"externalReferenceCode": "REL-CATEGORY-SUBCATEGORIES",
+	"edge": false,
+	"objectDefinitionModifiable2": true,
+	"system": false,
+	"name": "categorySubcategories",
+	"objectDefinitionScope2": "site",
+	"deletionType": "cascade",
+	"objectDefinitionExternalReferenceCode1": "FORUM-CATEGORY",
+	"objectDefinitionExternalReferenceCode2": "FORUM-CATEGORY",
+	"objectDefinitionName2": "ForumCategory",
+	"objectDefinitionId1": "[$OBJECT_DEFINITION_ID:ForumCategory$]",
+	"objectDefinitionId2": "[$OBJECT_DEFINITION_ID:ForumCategory$]"
+}

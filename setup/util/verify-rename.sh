@@ -87,6 +87,7 @@ MUST_EXIST=(
   "$SI/object-definitions/forum-message.object-definition.json"
   "$SI/object-relationships/forum-category-category-threads.object-relationship.json"
   "$SI/object-relationships/forum-category-category-messages.object-relationship.json"
+  "$SI/object-relationships/forum-category-category-subcategories.object-relationship.json"
   "$SI/object-relationships/forum-thread-thread-messages.object-relationship.json"
   "$SI/object-relationships/forum-thread-thread-flags.object-relationship.json"
   "$SI/object-relationships/forum-thread-thread-suspicious-activities.object-relationship.json"

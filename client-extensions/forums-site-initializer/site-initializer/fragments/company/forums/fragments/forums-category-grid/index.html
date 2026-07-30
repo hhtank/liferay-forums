@@ -1,8 +1,15 @@
 <!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
 [#assign scopeGroupId = themeDisplay.getScopeGroupId() /]
 [#assign scopeGroup = themeDisplay.getScopeGroup() /]
-[#assign pageSize = configuration.pageSize!"12" /]
-[#assign categoriesData = restClient.get("/c/forumcategories/scopes/" + scopeGroupId + "?pageSize=" + pageSize + "&sort=categoryName:asc")!"" /]
+[#assign maxCards = (configuration.pageSize!"12")?number /]
+[#--
+	Subcategories are intentionally capped at ONE level (see the MAX_DEPTH
+	constant in forums-categories-admin). Only top-level categories are shown
+	here; their subcategories are reached by drilling into the card. Fetch a
+	generous page so child counts can be computed, then cap the rendered cards
+	at the configured page size.
+--]
+[#assign categoriesData = restClient.get("/c/forumcategories/scopes/" + scopeGroupId + "?pageSize=200&sort=categoryName:asc")!"" /]
 [#assign baseHref = (themeDisplay.getPathFriendlyURLPublic()!"") + (scopeGroup.getFriendlyURL()!"") + (configuration.messagesURL!"/forums-messages") /]
 [#assign categoryIcons = {
 	"Best Practices": "star",
@@ -18,38 +25,57 @@
 		</h2>
 
 		<div class="justify-content-center row">
+			[#assign shown = 0 /]
 			[#if categoriesData?is_hash && categoriesData.items?has_content]
 				[#list categoriesData.items as cat]
-					[#assign catName = cat.categoryName!"" /]
-					[#assign iconKey = categoryIcons[catName]!"comments" /]
-					<div class="col-sm-6 col-lg-3 mb-4">
-						<a href="${baseHref}?categoryId=${cat.id}" class="card card-interactive card-interactive-secondary h-100 text-decoration-none forums-category-grid__card">
-							<div class="card-body d-flex flex-column h-100 pt-5 pb-4 px-4">
-								<div class="forums-category-grid__card-icon sticker sticker-lg mb-3">
-									<span class="sticker-overlay">
-										<svg class="lexicon-icon lexicon-icon-${iconKey}" role="presentation">
-											<use href="${themeDisplay.getPathThemeImages()}/clay/icons.svg#${iconKey}"></use>
+					[#assign parentId = (cat["r_categorySubcategories_c_forumCategoryId"]!0) /]
+					[#if parentId == 0 && shown < maxCards]
+						[#assign shown = shown + 1 /]
+						[#assign subCount = 0 /]
+						[#list categoriesData.items as child]
+							[#if (child["r_categorySubcategories_c_forumCategoryId"]!0) == cat.id]
+								[#assign subCount = subCount + 1 /]
+							[/#if]
+						[/#list]
+						[#assign catName = cat.categoryName!"" /]
+						[#assign iconKey = categoryIcons[catName]!"comments" /]
+						<div class="col-sm-6 col-lg-3 mb-4">
+							<a href="${baseHref}?categoryId=${cat.id}" class="card card-interactive card-interactive-secondary h-100 text-decoration-none forums-category-grid__card">
+								<div class="card-body d-flex flex-column h-100 pt-5 pb-4 px-4">
+									<div class="forums-category-grid__card-icon sticker sticker-lg mb-3">
+										<span class="sticker-overlay">
+											<svg class="lexicon-icon lexicon-icon-${iconKey}" role="presentation">
+												<use href="${themeDisplay.getPathThemeImages()}/clay/icons.svg#${iconKey}"></use>
+											</svg>
+										</span>
+									</div>
+									<div class="card-title mb-2">
+										[#if cat.categoryName?has_content]
+											${cat.categoryName?html}
+										[#else]
+											${languageUtil.get(locale, "unnamed-category")}
+										[/#if]
+									</div>
+									<p class="card-text text-secondary forums-category-grid__card-desc">${(cat.categoryDescription!"")?html}</p>
+									[#if subCount > 0]
+										<div class="forums-category-grid__card-subcount mb-2">
+											<span class="label label-secondary">
+												<span class="label-item label-item-expand">${languageUtil.get(locale, "x-subcategories")?replace("{0}", subCount?string)}</span>
+											</span>
+										</div>
+									[/#if]
+									<span class="forums-category-grid__card-arrow text-primary mt-auto align-self-end" aria-hidden="true">
+										<svg class="lexicon-icon lexicon-icon-angle-right" role="presentation">
+											<use href="${themeDisplay.getPathThemeImages()}/clay/icons.svg#angle-right"></use>
 										</svg>
 									</span>
 								</div>
-								<div class="card-title mb-2">
-									[#if cat.categoryName?has_content]
-										${cat.categoryName?html}
-									[#else]
-										${languageUtil.get(locale, "unnamed-category")}
-									[/#if]
-								</div>
-								<p class="card-text text-secondary forums-category-grid__card-desc">${(cat.categoryDescription!"")?html}</p>
-								<span class="forums-category-grid__card-arrow text-primary mt-auto align-self-end" aria-hidden="true">
-									<svg class="lexicon-icon lexicon-icon-angle-right" role="presentation">
-										<use href="${themeDisplay.getPathThemeImages()}/clay/icons.svg#angle-right"></use>
-									</svg>
-								</span>
-							</div>
-						</a>
-					</div>
+							</a>
+						</div>
+					[/#if]
 				[/#list]
-			[#else]
+			[/#if]
+			[#if shown == 0]
 				<div class="col-12 text-center text-secondary py-5">
 					${languageUtil.get(locale, "no-categories-found")}
 				</div>

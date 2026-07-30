@@ -24,6 +24,7 @@
 	data-label-announcement="${languageUtil.get(locale, "announcement")}"
 	data-label-views="${languageUtil.get(locale, "views")}"
 	data-label-all-categories="${languageUtil.get(locale, "all-categories")}"
+	data-label-subcategories="${languageUtil.get(locale, "subcategories")}"
 	data-label-showing="${languageUtil.get(locale, "showing-x-of-x-items")}">
 	<div class="panel-body">
 
@@ -56,6 +57,12 @@
 				</div>
 				<a href="${forumsNewDiscussionURL}" class="btn btn-primary text-nowrap" id="forumsMessageListAskBtn" style="display: none;">${languageUtil.get(locale, "new-forum-message")}</a>
 			</div>
+		</div>
+
+		<!-- Subcategories of the current category (hidden when there are none) -->
+		<div class="forums-message-list__subcategories mb-4" id="forumsMessageListSubcategories" style="display:none;">
+			<h3 class="h5 text-dark mb-3">${languageUtil.get(locale, "subcategories")}</h3>
+			<div class="row" id="forumsMessageListSubcategoriesRow"></div>
 		</div>
 
 		<!-- Tab filters -->

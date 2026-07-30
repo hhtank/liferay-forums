@@ -542,14 +542,38 @@ if (messageComposer) {
 		.then(function(r) { return r.json(); })
 		.then(function(data) {
 			var items = data.items || [];
+
+			/* Group subcategories under their parent so the structure is
+			   visible. Posting into a parent stays valid — a parent lists only
+			   its own topics, so it must remain a usable target. */
+			var PARENT_FK = 'r_categorySubcategories_c_forumCategoryId';
+
+			var byId = {};
+			items.forEach(function(cat) { byId[cat.id] = cat; });
+
+			var childrenOf = {};
 			items.forEach(function(cat) {
+				var pid = Number(cat[PARENT_FK]) || 0;
+				if (pid && !byId[pid]) pid = 0;
+				(childrenOf[pid] = childrenOf[pid] || []).push(cat);
+			});
+
+			function addOption(cat, depth) {
 				var opt = document.createElement('option');
 				opt.value = cat.id;
-				opt.textContent = cat.categoryName || messageComposer.dataset.labelUnnamed || 'Unnamed';
+				opt.textContent = (depth > 0 ? '— ' : '')
+					+ (cat.categoryName || messageComposer.dataset.labelUnnamed || 'Unnamed');
 				if (categoryIdParam && String(cat.id) === categoryIdParam) {
 					opt.selected = true;
 				}
 				categorySelect.appendChild(opt);
+			}
+
+			(childrenOf[0] || []).forEach(function(cat) {
+				addOption(cat, 0);
+				(childrenOf[cat.id] || []).forEach(function(child) {
+					addOption(child, 1);
+				});
 			});
 		})
 		.catch(function(err) {

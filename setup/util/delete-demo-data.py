@@ -64,13 +64,19 @@ def delete_collection(session, base, list_path, delete_path, label):
         resp = session.delete(f"{base}{delete_path}/{item_id}")
         return item_id, resp.status_code
 
+    # A 404 means the entry is already gone — expected when a relationship
+    # cascade removed it before the loop reached it (e.g. a subcategory deleted
+    # along with its parent category). Treat it as success, not a failure.
+    def _ok(status):
+        return status < 300 or status == 404
+
     # Pass 1: parallel
     print(f"  Found {len(ids)} to delete ({MAX_WORKERS} parallel workers)...")
     failed = []
     deleted = 0
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         for item_id, status in executor.map(_delete, ids):
-            if status < 300:
+            if _ok(status):
                 deleted += 1
             else:
                 failed.append(item_id)
@@ -81,7 +87,7 @@ def delete_collection(session, base, list_path, delete_path, label):
         still_failed = []
         for item_id in failed:
             _, status = _delete(item_id)
-            if status < 300:
+            if _ok(status):
                 deleted += 1
             else:
                 still_failed.append((item_id, status))

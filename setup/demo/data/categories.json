@@ -18,5 +18,17 @@
 		"erc": "FORUM-CAT-BEST-PRACTICES",
 		"categoryName": "Best Practices",
 		"categoryDescription": "Proven patterns, architectural advice, and optimization strategies."
+	},
+	{
+		"erc": "FORUM-CAT-TECHNICAL-HELP-INSTALLATION",
+		"categoryName": "Installation & Upgrades",
+		"categoryDescription": "Installing, upgrading, and migrating between versions.",
+		"parentErc": "FORUM-CAT-TECHNICAL-HELP"
+	},
+	{
+		"erc": "FORUM-CAT-TECHNICAL-HELP-PERFORMANCE",
+		"categoryName": "Performance & Tuning",
+		"categoryDescription": "Profiling, caching, and scaling under load.",
+		"parentErc": "FORUM-CAT-TECHNICAL-HELP"
 	}
 ]

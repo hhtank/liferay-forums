@@ -11,6 +11,9 @@ This Liferay Workspace project is a Fragments and Liferay Objects based replacem
 - [Required Feature Flags](#required-feature-flags)
 - [Fragments](#fragments)
   - [UI Style: Standard and Flat](#ui-style-standard-and-flat)
+- [Category Hierarchy](#category-hierarchy)
+  - [Why the One-Level Cap Is a Constant, Not a Setting](#why-the-one-level-cap-is-a-constant-not-a-setting)
+  - [The Cap Is UI-Enforced](#the-cap-is-ui-enforced)
 - [Thread Priorities](#thread-priorities)
 - [User Mentions](#user-mentions)
 - [Page Layout and Fragment Placement](#page-layout-and-fragment-placement)
@@ -86,8 +89,8 @@ The following **Release** feature flags must be enabled before deploying.
 
 | Fragment Name | Folder | Description |
 | :--- | :--- | :--- |
-| **Forums Categories Admin** | [forums-categories-admin](fragments/forums-categories-admin) | Administration interface for managing forum categories. |
-| **Forums Category Grid** | [forums-category-grid](fragments/forums-category-grid) | Displays the main forum categories in a grid layout. |
+| **Forums Categories Admin** | [forums-categories-admin](fragments/forums-categories-admin) | Administration interface for managing forum categories, including assigning a parent to create a subcategory. |
+| **Forums Category Grid** | [forums-category-grid](fragments/forums-category-grid) | Displays the top-level forum categories in a grid layout, badging those that contain subcategories. |
 | **Forums Hero** | [forums-hero](fragments/forums-hero) | Top banner for the forums featuring statistics (like member count) and quick actions. |
 | **Forums Moderation** | [forums-moderation](fragments/forums-moderation) | Tools for moderating forum content. |
 | **Forums Message Composer** | [forums-message-composer](fragments/forums-message-composer) | Modal composer for creating and editing forum messages and replies. |
@@ -98,6 +101,32 @@ The following **Release** feature flags must be enabled before deploying.
 ### UI Style
 
 The forums fragments ship a single, **style-neutral** look. Color values reference Classic / Lexicon Style Book tokens with a literal hex fallback, e.g. `var(--primary, #0b5fff)` -- the Style Book token wins when the active theme (or a Style Book) defines it, otherwise the hex is used. The fragments deliberately do **not** use Dialect tokens (`--color-*`): the visual identity belongs to the theme / Style Book, so customers re-skin the forum by editing Style Book tokens or layering a theme CSS client extension, never by touching the fragments.
+
+---
+
+## Category Hierarchy
+
+Categories support **one optional level of subcategories**. Structure is opt-in rather than a mode: a community that never assigns a parent gets a flat forum and renders exactly as it did before this feature; a community that wants navigable structure creates one level. There is no setting to turn on.
+
+- **Storage** — a self-referential `ForumCategory` -> `ForumCategory` Object relationship (`categorySubcategories`, `deletionType: cascade`) exposes the FK field `r_categorySubcategories_c_forumCategoryId` on the child. Absent or `0` means top-level. This replaces the unused `parentCategoryId` scalar field, so there is a single source of truth.
+- **Authoring** — the Categories Admin fragment offers a **Parent Category** select that lists **only top-level categories**, and a category that already has subcategories cannot itself be given a parent. Those two rules are what make a third level unreachable through the UI.
+- **Browsing** — the Category Grid shows only top-level categories, badging those with children (`{0} Subcategories`). Drilling in shows that category's subcategories as cards above its topic list, and the breadcrumb becomes `Forums > Category > Subcategory` — at most three crumbs.
+- **Topic scope** — a parent lists only the topics assigned **directly** to it; subcategory topics live under the subcategory. This matches Message Boards. Posting into a parent stays valid, so a parent is never a dead end, and the Message Composer's category select shows subcategories indented under their parent.
+- **Deletion** — because the relationship cascades, deleting a parent also deletes its subcategories and all of their topics. The admin delete dialog names the subcategory count before confirming.
+
+### Why the One-Level Cap Is a Constant, Not a Setting
+
+The cap lives in source as `MAX_DEPTH = 1` in the fragment JavaScript and is deliberately **not** configurable. Unbounded nesting is the failure mode this feature exists to avoid — legacy Message Boards allows arbitrarily deep `parentCategoryId` chains, and even Discourse caps nesting at one subcategory level by default. The moment a "max depth" option exists, someone sets it to 5 and the problem returns as a supported feature. The guiding rule: **categories cut where permissions and audiences cut; tags handle topics.**
+
+Depth beyond one level is also unnecessary here, because Forums Objects are **site-scoped** — the effective navigational depth a customer already gets is Site -> Category -> Subcategory.
+
+### The Cap Is UI-Enforced
+
+The one-level cap is enforced in the authoring UI only. A direct `POST /o/c/forumcategories` that sets the parent FK to a category that is already a subcategory **will succeed** and create a third level.
+
+This is the same class of gap as [Ban Enforcement Is UI-Only](#ban-enforcement-is-ui-only), and for the same reason: Object Validation rules use the Expression Builder, which can only see the entry's own field values and **cannot query other Object collections** — so a validation rule cannot check whether the selected parent itself has a parent. Object Actions fire only after the entry is committed, and Groovy script actions are unavailable on Liferay SaaS. Hardening would require a Microservice Client Extension registered as an `On After Add` / `On After Update` webhook that detects a too-deep entry and reparents or removes it, exactly as described for ban enforcement.
+
+The fragments degrade safely if such data exists: any category deeper than one level is normalized to top-level for display rather than being hidden, and every parent-chain walk is cycle-guarded.
 
 ---
 
@@ -253,7 +282,7 @@ The `setup/demo/` directory contains scripts for populating a development enviro
 python3 setup/demo/1-create-demo-data.py <siteId> [BASE_URL] [--email EMAIL] [--password PASSWORD]
 ```
 
-Creates the four default Forum Categories (by ERC if they do not already exist), a set of demo user accounts assigned the Site Member role with profile photos, Forum Threads with keywords distributed across those categories, and replies to each message. All content is created as the admin user; authorship is corrected in Step 2.
+Creates the four default top-level Forum Categories plus two subcategories under **Technical Help** (by ERC if they do not already exist), a set of demo user accounts assigned the Site Member role with profile photos, Forum Threads with keywords distributed across those categories, and replies to each message. Categories are created in two passes — parents first, then children — so each subcategory's parent id is resolvable. All content is created as the admin user; authorship is corrected in Step 2.
 
 | Argument | Default | Description |
 | :--- | :--- | :--- |

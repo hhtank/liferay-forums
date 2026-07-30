@@ -141,18 +141,37 @@ def _json(resp):
 
 # ─── Step 1: Ensure categories ────────────────────────────────────────────
 
+CATEGORY_PARENT_FK = "r_categorySubcategories_c_forumCategoryId"
+
+
 def ensure_categories(session, base, site_id):
     print("\n═══ Step 1: Ensuring default categories exist ═══")
     cat_map = {}
-    for cat in DEFAULT_CATEGORIES:
+
+    # Two passes so a subcategory's parent id is always resolvable. Structure is
+    # capped at one level (see MAX_DEPTH in the forums-categories-admin
+    # fragment), so a parent pass followed by a child pass is sufficient — a
+    # subcategory may never itself be a parent.
+    parents = [c for c in DEFAULT_CATEGORIES if not c.get("parentErc")]
+    children = [c for c in DEFAULT_CATEGORIES if c.get("parentErc")]
+
+    for cat in parents + children:
         erc = cat["erc"]
         url = f"{base}/o/c/forumcategories/scopes/{site_id}/by-external-reference-code/{erc}"
+
+        parent_erc = cat.get("parentErc")
+        parent_id = cat_map.get(parent_erc) if parent_erc else None
+        if parent_erc and not parent_id:
+            print(f"  ⚠️  Skipping {cat['categoryName']}: parent {parent_erc} was not created")
+            continue
+
+        label = f"{cat['categoryName']} (under {parent_erc})" if parent_erc else cat["categoryName"]
 
         resp = session.get(url)
         body = _json(resp)
         if resp.ok and body and body.get("id"):
             cat_map[erc] = body["id"]
-            print(f"  ✅ Exists: {cat['categoryName']} (id={body['id']})")
+            print(f"  ✅ Exists: {label} (id={body['id']})")
             continue
 
         payload = {
@@ -161,20 +180,23 @@ def ensure_categories(session, base, site_id):
             "categoryName_i18n": {"en_US": cat["categoryName"]},
             "categoryDescription": cat["categoryDescription"],
         }
+        if parent_id:
+            payload[CATEGORY_PARENT_FK] = parent_id
+
         resp2 = session.put(url, json=payload)
         body2 = _json(resp2)
         if resp2.ok and body2 and body2.get("id"):
             cat_map[erc] = body2["id"]
-            print(f"  ✅ Created: {cat['categoryName']} (id={body2['id']})")
+            print(f"  ✅ Created: {label} (id={body2['id']})")
             continue
 
         resp3 = session.post(f"{base}/o/c/forumcategories/scopes/{site_id}", json=payload)
         body3 = _json(resp3)
         if resp3.ok and body3 and body3.get("id"):
             cat_map[erc] = body3["id"]
-            print(f"  ✅ Created (POST): {cat['categoryName']} (id={body3['id']})")
+            print(f"  ✅ Created (POST): {label} (id={body3['id']})")
         else:
-            print(f"  ❌ Failed to create {cat['categoryName']}: {resp3.status_code} — {body3}")
+            print(f"  ❌ Failed to create {label}: {resp3.status_code} — {body3}")
 
     return cat_map
 

@@ -11,15 +11,6 @@
 	"externalReferenceCode": "FORUM-CATEGORY",
 	"objectFields": [
 		{
-			"DBType": "Long",
-			"businessType": "LongInteger",
-			"label": {
-				"en_US": "Parent Category ID"
-			},
-			"name": "parentCategoryId",
-			"required": false
-		},
-		{
 			"DBType": "String",
 			"businessType": "Text",
 			"indexed": true,

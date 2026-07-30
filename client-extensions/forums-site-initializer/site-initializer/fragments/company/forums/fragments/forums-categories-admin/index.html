@@ -16,7 +16,11 @@
 	data-label-cancel="${languageUtil.get(locale, "cancel")}"
 	data-label-error-updating="${languageUtil.get(locale, "error-updating-category")}"
 	data-label-category-name="${languageUtil.get(locale, "category-name")}"
-	data-label-description="${languageUtil.get(locale, "description")}">
+	data-label-description="${languageUtil.get(locale, "description")}"
+	data-label-parent-category="${languageUtil.get(locale, "parent-category")}"
+	data-label-top-level="${languageUtil.get(locale, "none")} (${languageUtil.get(locale, "top-level")})"
+	data-label-has-subcategories="${languageUtil.get(locale, "category-with-subcategories-cannot-be-nested")}"
+	data-label-confirm-delete-category-with-subcategories="${languageUtil.get(locale, "confirm-delete-category-with-subcategories")}">
 	<div class="container">
 		<div class="alert alert-warning" id="forumsCategoriesAdminNoPermissions" style="display:none;" role="alert">
 			${languageUtil.get(locale, "you-do-not-have-the-required-permissions-to-access-this-application")}
@@ -49,10 +53,21 @@
 								<input type="text" class="form-control" id="forumsCategoriesAdminCatName" required>
 							</div>
 						</div>
-						<div class="col-md-6">
+						<div class="col-md">
 							<div class="form-group mb-md-0">
 								<label for="forumsCategoriesAdminCatDesc">${languageUtil.get(locale, "description")}</label>
 								<input type="text" class="form-control" id="forumsCategoriesAdminCatDesc">
+							</div>
+						</div>
+						<div class="col-md">
+							<div class="form-group mb-md-0">
+								<label for="forumsCategoriesAdminCatParent">
+									${languageUtil.get(locale, "parent-category")}
+									<span class="font-weight-normal text-secondary">(${languageUtil.get(locale, "one-level-only")})</span>
+								</label>
+								<select class="form-control" id="forumsCategoriesAdminCatParent">
+									<!-- Populated by JS -->
+								</select>
 							</div>
 						</div>
 						<div class="col-md-auto">
