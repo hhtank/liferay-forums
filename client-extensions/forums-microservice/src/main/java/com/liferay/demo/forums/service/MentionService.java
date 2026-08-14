@@ -92,8 +92,8 @@ public class MentionService {
 	}
 
 	/**
-	 * Resolves mentioned screen names to {@link Subscriber} records (user id +
-	 * email address) <em>strictly against the members of the given site</em>.
+	 * Resolves mentioned screen names to user ids <em>strictly against the
+	 * members of the given site</em>.
 	 *
 	 * <p>Only members of {@code siteId} can be mentioned and notified. A
 	 * mentioned screen name that is not a member of the site — for example a
@@ -107,12 +107,12 @@ public class MentionService {
 	 * @param siteId      the group id of the site the post belongs to; when
 	 *                    {@code <= 0} no mentions are resolved (fail closed)
 	 * @param authToken   OAuth2 bearer token (JWT) for the API call
-	 * @return the resolvable, site-member mentioned users; never {@code null}
+	 * @return the resolvable, site-member mentioned user ids; never {@code null}
 	 */
-	public List<Subscriber> resolveMentions(
+	public List<Long> resolveMentions(
 		Set<String> screenNames, long siteId, String authToken) {
 
-		List<Subscriber> mentioned = new ArrayList<>();
+		List<Long> mentioned = new ArrayList<>();
 
 		if ((screenNames == null) || screenNames.isEmpty()) {
 			return mentioned;
@@ -126,9 +126,8 @@ public class MentionService {
 			return mentioned;
 		}
 
-		// A single site-scoped query filtered on the (indexed, filterable)
-		// alternateName field. Non-members do not appear in this site listing,
-		// so they cannot be resolved even if their handle is spelled correctly.
+		// Single site-scoped query on the indexed alternateName field. Non-members
+		// never appear in this listing, so they cannot be resolved.
 
 		String filter = screenNames.stream()
 			.map(screenName -> "alternateName eq '" + _escape(screenName) + "'")
@@ -137,9 +136,9 @@ public class MentionService {
 		try {
 			String response = _liferayApiClient.get(
 				"/o/headless-admin-user/v1.0/sites/" + siteId +
-					"/user-accounts?fields=id,emailAddress&pageSize=" +
-						screenNames.size() + "&filter=" +
-							URLEncoder.encode(filter, StandardCharsets.UTF_8),
+					"/user-accounts?fields=id&pageSize=" + screenNames.size() +
+						"&filter=" +
+							_encodeFilter(filter),
 				authToken);
 
 			JSONArray items = new JSONObject(response).optJSONArray("items");
@@ -153,10 +152,9 @@ public class MentionService {
 					}
 
 					long userId = item.optLong("id", 0L);
-					String emailAddress = item.optString("emailAddress", "");
 
-					if ((userId > 0L) && !emailAddress.isBlank()) {
-						mentioned.add(new Subscriber(userId, emailAddress));
+					if (userId > 0L) {
+						mentioned.add(userId);
 					}
 				}
 			}
@@ -174,6 +172,18 @@ public class MentionService {
 			mentioned.size(), screenNames.size(), siteId);
 
 		return mentioned;
+	}
+
+	/**
+	 * URL-encodes an OData filter. {@code URLEncoder} emits "+" for spaces,
+	 * which Liferay's filter parser rejects, so they are sent as %20.
+	 */
+	private String _encodeFilter(String filter) {
+		return URLEncoder.encode(
+			filter, StandardCharsets.UTF_8
+		).replace(
+			"+", "%20"
+		);
 	}
 
 	/* Double single quotes per OData string escaping. */

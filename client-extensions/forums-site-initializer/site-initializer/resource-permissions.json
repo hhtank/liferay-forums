@@ -58,13 +58,6 @@
 	{
 		"actionIds": ["VIEW"],
 		"primKey": "0",
-		"resourceName": "[$OBJECT_DEFINITION_CLASS_NAME:ForumMailingList$]",
-		"roleName": "Guest",
-		"scope": 1
-	},
-	{
-		"actionIds": ["VIEW"],
-		"primKey": "0",
 		"resourceName": "[$OBJECT_DEFINITION_CLASS_NAME:ForumSuspiciousActivity$]",
 		"roleName": "Guest",
 		"scope": 1
@@ -135,13 +128,6 @@
 	{
 		"actionIds": ["VIEW"],
 		"primKey": "0",
-		"resourceName": "[$OBJECT_DEFINITION_CLASS_NAME:ForumMailingList$]",
-		"roleName": "Site Member",
-		"scope": 1
-	},
-	{
-		"actionIds": ["VIEW"],
-		"primKey": "0",
 		"resourceName": "[$OBJECT_DEFINITION_CLASS_NAME:ForumSuspiciousActivity$]",
 		"roleName": "Site Member",
 		"scope": 1
@@ -151,6 +137,13 @@
 		"primKey": "0",
 		"resourceName": "[$OBJECT_DEFINITION_CLASS_NAME:ForumBan$]",
 		"roleName": "Site Member",
+		"scope": 1
+	},
+	{
+		"actionIds": ["VIEW"],
+		"primKey": "0",
+		"resourceName": "[$OBJECT_DEFINITION_CLASS_NAME:ForumNotification$]",
+		"roleName": "User",
 		"scope": 1
 	},
 	{
@@ -192,6 +185,13 @@
 		"actionIds": ["ADD_OBJECT_ENTRY"],
 		"primKey": "0",
 		"resourceName": "com.liferay.object#[$OBJECT_DEFINITION_ID:ForumThreadFlag$]",
+		"roleName": "User",
+		"scope": 1
+	},
+	{
+		"actionIds": ["ADD_OBJECT_ENTRY"],
+		"primKey": "0",
+		"resourceName": "com.liferay.object#[$OBJECT_DEFINITION_ID:ForumSubscription$]",
 		"roleName": "User",
 		"scope": 1
 	}

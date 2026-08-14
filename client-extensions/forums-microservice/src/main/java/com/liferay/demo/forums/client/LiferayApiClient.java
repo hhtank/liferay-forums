@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.DefaultUriBuilderFactory;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import reactor.core.publisher.Mono;
@@ -34,8 +35,19 @@ public class LiferayApiClient {
 		_user = user;
 		_password = password;
 
+		// Callers pass fully-encoded paths (OData filters contain %20 and %27).
+		// The default encoding mode would escape the "%" again, so URIs are taken
+		// as-is.
+
+		DefaultUriBuilderFactory uriBuilderFactory = new DefaultUriBuilderFactory(
+			baseUrl);
+
+		uriBuilderFactory.setEncodingMode(
+			DefaultUriBuilderFactory.EncodingMode.NONE);
+
 		_webClient = WebClient.builder()
 			.baseUrl(baseUrl)
+			.uriBuilderFactory(uriBuilderFactory)
 			.defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
 			.build();
 	}
@@ -98,6 +110,17 @@ public class LiferayApiClient {
 			.bodyValue(jsonBody)
 			.retrieve()
 			.bodyToMono(String.class);
+	}
+
+	/**
+	 * Non-blocking DELETE. Cold — nothing is sent until subscribed.
+	 */
+	public Mono<Void> deleteAsync(String path, String authToken) {
+		return _webClient.delete()
+			.uri(path)
+			.headers(h -> _setAuthHeader(h, authToken))
+			.retrieve()
+			.bodyToMono(Void.class);
 	}
 
 	private void _setAuthHeader(HttpHeaders headers, String authToken) {

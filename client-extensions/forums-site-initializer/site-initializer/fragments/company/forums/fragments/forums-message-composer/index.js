@@ -4,6 +4,7 @@ var messageComposer = fragmentElement.querySelector('#forumsMessageComposer');
 if (messageComposer) {
 	var portalURL = Liferay.ThemeDisplay.getPortalURL();
 	var scopeGroupId = Liferay.ThemeDisplay.getScopeGroupId();
+	var currentUserId = Liferay.ThemeDisplay.getUserId();
 	var headers = {
 		'Accept': 'application/json',
 		'Content-Type': 'application/json'
@@ -893,10 +894,14 @@ if (messageComposer) {
 						return r.json();
 					}));
 
-					if (subscribeCheck && subscribeCheck.checked && msg.externalReferenceCode) {
-						promises.push(Liferay.Util.fetch(portalURL + '/o/c/forumthreads/scopes/' + scopeGroupId + '/by-external-reference-code/' + encodeURIComponent(msg.externalReferenceCode) + '/subscribe', {
+					if (subscribeCheck && subscribeCheck.checked && parseInt(currentUserId) > 0) {
+						promises.push(Liferay.Util.fetch(portalURL + '/o/c/forumsubscriptions/scopes/' + scopeGroupId, {
 							headers: headers,
-							method: 'POST'
+							method: 'POST',
+							body: JSON.stringify({
+								r_threadSubscriptions_c_forumThreadId: msg.id,
+								subscriberUserId: parseInt(currentUserId)
+							})
 						}).then(function(r) {
 							if (!r.ok) throw new Error('HTTP ' + r.status);
 						}));

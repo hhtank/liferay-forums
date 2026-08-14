@@ -1,0 +1,25 @@
+{
+	"objectDefinitionId": "[$OBJECT_DEFINITION_ID:ForumMessage$]",
+	"object-actions": [
+		{
+			"active": true,
+			"externalReferenceCode": "FORUM-MESSAGE-NEW-REPLY-ACTION",
+			"label": "{\"en_US\": \"Notify On New Reply\"}",
+			"name": "ForumMessageNewReply",
+			"objectActionExecutorKey": "liferay-forumsmicroservice-object-action-new-reply",
+			"objectActionTriggerKey": "onAfterAdd",
+			"parameters": {},
+			"system": false
+		},
+		{
+			"active": true,
+			"externalReferenceCode": "FORUM-MESSAGE-UPDATED-REPLY-ACTION",
+			"label": "{\"en_US\": \"Notify On Updated Reply\"}",
+			"name": "ForumMessageUpdatedReply",
+			"objectActionExecutorKey": "liferay-forumsmicroservice-object-action-updated-reply",
+			"objectActionTriggerKey": "onAfterUpdate",
+			"parameters": {},
+			"system": false
+		}
+	]
+}
