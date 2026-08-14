@@ -109,5 +109,5 @@ echo ""
 # ── Run the Spring Boot application ─────────────────────────────────────────
 exec java \
     -XX:MaxRAMPercentage=50.0 \
-    -Dspring.profiles.active=default \
+    -Dspring.profiles.active=default,local \
     -jar "${BOOT_JAR}"

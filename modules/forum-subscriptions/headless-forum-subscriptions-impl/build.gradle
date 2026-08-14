@@ -1,4 +1,0 @@
-dependencies {
-	compileOnly group: "com.liferay.portal", name: "release.dxp.api"
-	compileOnly project(":modules:forum-subscriptions:headless-forum-subscriptions-api")
-}

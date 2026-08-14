@@ -1003,63 +1003,87 @@ if (messageDetail) {
 			canUpdateMessage = true;
 		}
 
+		/* Subscription state lives in the ForumSubscription object. Object entry
+		   permissions scope the list to the caller, so a match means "I am
+		   subscribed". */
+
 		var subscribeBtn = messageDetail.querySelector('#forumsDetailSubscribeBtn');
-		var currentSubscribeUrl = null;
-		var isSubscribed = false;
 
-		if (subscribeBtn && msg.actions && !isBanned) {
-			if (msg.actions['unsubscribe']) {
-				currentSubscribeUrl = msg.actions['unsubscribe'].href;
-				isSubscribed = true;
-			} else if (msg.actions['subscribe']) {
-				currentSubscribeUrl = msg.actions['subscribe'].href;
-				isSubscribed = false;
-			}
+		if (subscribeBtn && !isBanned && parseInt(currentUserId) > 0) {
+			var subscriptionsUrl = portalURL + '/o/c/forumsubscriptions/scopes/' + scopeGroupId;
+			/* Relationship fields compare as strings, so quote the id. */
+			var subscriptionFilter = encodeURIComponent(
+				"r_threadSubscriptions_c_forumThreadId eq '" + messageId + "'");
 
-			if (currentSubscribeUrl) {
-				subscribeBtn.textContent = isSubscribed 
-					? (messageDetail.dataset.labelUnsubscribe || 'Unsubscribe')
-					: (messageDetail.dataset.labelSubscribe || 'Subscribe');
+			Liferay.Util.fetch(subscriptionsUrl + '?pageSize=1&fields=id&filter=' + subscriptionFilter, {
+				headers: headers,
+				method: 'GET'
+			})
+			.then(function(r) { return r.ok ? r.json() : {items: []}; })
+			.then(function(page) {
+				var subscription = (page.items || [])[0];
+				var subscriptionId = subscription ? subscription.id : 0;
+
+				function renderSubscribeLabel(btn) {
+					btn.textContent = subscriptionId
+						? (messageDetail.dataset.labelUnsubscribe || 'Unsubscribe')
+						: (messageDetail.dataset.labelSubscribe || 'Subscribe');
+				}
+
+				renderSubscribeLabel(subscribeBtn);
 				subscribeBtn.style.display = '';
 
 				var newSubBtn = subscribeBtn.cloneNode(true);
 				subscribeBtn.parentNode.replaceChild(newSubBtn, subscribeBtn);
 				subscribeBtn = newSubBtn;
-				
+
 				subscribeBtn.addEventListener('click', function(e) {
 					e.preventDefault();
 					var btn = this;
 					btn.style.opacity = '0.5';
 					btn.style.pointerEvents = 'none';
-					
-					Liferay.Util.fetch(currentSubscribeUrl, {
-						headers: headers,
-						method: 'POST'
-					})
-					.then(function(r) {
-						if (r.ok) {
-							isSubscribed = !isSubscribed;
-							currentSubscribeUrl = isSubscribed 
-								? currentSubscribeUrl.replace('/subscribe', '/unsubscribe')
-								: currentSubscribeUrl.replace('/unsubscribe', '/subscribe');
-								
-							btn.textContent = isSubscribed 
-								? (messageDetail.dataset.labelUnsubscribe || 'Unsubscribe')
-								: (messageDetail.dataset.labelSubscribe || 'Subscribe');
-							
-							var optionsMenu = btn.closest('.dropdown-menu');
-							if (optionsMenu) optionsMenu.classList.remove('show');
-							
-							if (Liferay.Util && Liferay.Util.openToast) {
-								var toastMsg = isSubscribed 
-									? (messageDetail.dataset.labelSubscribedToast || 'You have been subscribed to this message.') 
-									: (messageDetail.dataset.labelUnsubscribedToast || 'You have been unsubscribed from this message.');
-								Liferay.Util.openToast({
-									message: toastMsg,
-									title: messageDetail.dataset.labelSuccess || 'Success',
-									type: 'success'
-								});
-							}
+
+					var request = subscriptionId
+						? Liferay.Util.fetch(portalURL + '/o/c/forumsubscriptions/' + subscriptionId, {
+							headers: headers,
+							method: 'DELETE'
+						}).then(function(r) {
+							if (r.ok) subscriptionId = 0;
+							return r.ok;
+						})
+						: Liferay.Util.fetch(subscriptionsUrl, {
+							headers: headers,
+							method: 'POST',
+							body: JSON.stringify({
+								r_threadSubscriptions_c_forumThreadId: parseInt(messageId),
+								subscriberUserId: parseInt(currentUserId)
+							})
+						}).then(function(r) {
+							if (!r.ok) return false;
+							return r.json().then(function(created) {
+								subscriptionId = created.id;
+								return true;
+							});
+						});
+
+					request
+					.then(function(ok) {
+						if (!ok) return;
+
+						renderSubscribeLabel(btn);
+
+						var optionsMenu = btn.closest('.dropdown-menu');
+						if (optionsMenu) optionsMenu.classList.remove('show');
+
+						if (Liferay.Util && Liferay.Util.openToast) {
+							var toastMsg = subscriptionId
+								? (messageDetail.dataset.labelSubscribedToast || 'You have been subscribed to this message.')
+								: (messageDetail.dataset.labelUnsubscribedToast || 'You have been unsubscribed from this message.');
+							Liferay.Util.openToast({
+								message: toastMsg,
+								title: messageDetail.dataset.labelSuccess || 'Success',
+								type: 'success'
+							});
 						}
 					})
 					.catch(function(err) { console.error('Subscription error:', err); })
@@ -1068,7 +1092,8 @@ if (messageDetail) {
 						btn.style.pointerEvents = '';
 					});
 				});
-			}
+			})
+			.catch(function(err) { console.error('Subscription lookup error:', err); });
 		}
 
 		/* Increment viewCount via REST PATCH (unique per session) */

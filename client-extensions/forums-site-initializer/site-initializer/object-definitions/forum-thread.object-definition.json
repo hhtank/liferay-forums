@@ -7,7 +7,7 @@
 	"enableLocalization": true,
 	"accountEntryRestricted": false,
 	"enableFormContainer": true,
-	"enableObjectEntrySubscription": true,
+	"enableObjectEntrySubscription": false,
 	"externalReferenceCode": "FORUM-THREAD",
 	"objectFields": [
 		{

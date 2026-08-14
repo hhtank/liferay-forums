@@ -8,6 +8,7 @@ This Liferay Workspace project is a Fragments and Liferay Objects based replacem
 
 - [Screenshots](#screenshots)
 - [Setup](#setup)
+- [Initializing a New Instance](#initializing-a-new-instance)
 - [Required Feature Flags](#required-feature-flags)
 - [Fragments](#fragments)
   - [UI Style: Standard and Flat](#ui-style-standard-and-flat)
@@ -23,12 +24,16 @@ This Liferay Workspace project is a Fragments and Liferay Objects based replacem
 - [Forum Subscription Notifications: Filling a DXP Feature Gap](#forum-subscription-notifications-filling-a-dxp-feature-gap)
   - [The Feature Gap](#the-feature-gap)
   - [Forums Microservice (Client Extension)](#forums-microservice-client-extension)
-  - [Forum Subscriptions RESTBuilder OSGi Module (`forum-subscriptions`)](#forum-subscriptions-restbuilder-osgi-module-forum-subscriptions)
+  - [Notification Templates &amp; Object Actions](#notification-templates--object-actions)
 - [Known Limitations](#known-limitations)
   - [View Count Not Incremented for Guest Users](#view-count-not-incremented-for-guest-users)
   - [Ban Enforcement Is UI-Only](#ban-enforcement-is-ui-only)
   - [Thread Priority Permission Is UI-Only](#thread-priority-permission-is-ui-only)
   - ["Top Replies" Implemented as "Recent Activity"](#top-replies-implemented-as-recent-activity)
+  - [The Site Initializer Caps Out at 12 Object Definitions](#the-site-initializer-caps-out-at-12-object-definitions)
+  - [The Bell Notification Is Not Clickable](#the-bell-notification-is-not-clickable)
+  - [HSQLDB Produces Misleading Failures](#hsqldb-produces-misleading-failures)
+  - [`forum-stats` Is Not SaaS-Installable](#forum-stats-is-not-saas-installable)
 
 ---
 
@@ -68,6 +73,29 @@ The required Object permissions and Service Access Policy are applied automatica
 | [sap-entries.json](client-extensions/forums-site-initializer/site-initializer/sap-entries.json) | Declares the `FORUM_GUEST_ACCESS` Service Access Policy so that non-authenticated (Guest) users can invoke the Object REST APIs in order to see forum messages and replies. |
 
 > **Security note -- how Guest access is actually bounded.** The SAP signature (`ObjectEntryResourceImpl#get*`) opens the unauthenticated GET invocation path for **every** custom Object, not just the forum objects, because all Objects share the single `ObjectEntryResourceImpl` REST class -- there is no way to scope a SAP signature to one Object. What actually restricts Guest to *only* the forum data is the second gate: each request re-checks the `VIEW` permission against the specific Object, and `resource-permissions.json` grants Guest `VIEW` on the forum objects only. **The per-object boundary is enforced by permissions, not by the SAP.** Consequently: **never grant the Guest role `VIEW` on any custom Object you do not intend to expose anonymously** -- with this SAP active, such an object becomes readable without authentication immediately, and the SAP will not stop it.
+
+---
+
+## Initializing a New Instance
+
+Run these in order. Steps 1–5 are order-dependent: the feature flags gate Object capabilities the initializer relies on, so enabling them *after* creating the site leaves it half-configured.
+
+| # | Step | Where |
+| :-- | :--- | :--- |
+| 1 | Enable the [feature flags](#required-feature-flags) `LPD-17564`, `LPD-34594`, `LPD-11235` | both |
+| 2 | Set `siteExternalReferenceCode` / `siteName` in [`client-extension.yaml`](client-extensions/forums-site-initializer/client-extension.yaml) — see [Setup](#setup) | both |
+| 3 | `./gw build`, then copy `forums-site-initializer.zip` to `$LIFERAY_HOME/deploy` | both |
+| 4 | Deploy the [Forums Microservice](#forums-microservice-client-extension) — `lcp deploy` on PaaS, or copy `forums-microservice.zip` to `$LIFERAY_HOME/deploy` locally | both |
+| 5 | Create the site, choosing the **Forums** site initializer | both |
+| 6 | Start the microservice: `cd client-extensions/forums-microservice && ./run-local.sh` | local |
+| 7 | [Replace the two imported `ForumMessage` actions with webhooks](#binding-the-object-actions-locally) | local |
+| 8 | [Demo data](#demo-data) scripts 1–5, in numeric order | optional |
+
+> **Skipping step 4 fails silently.** Without the microservice client extension nothing calls the notification handlers: replies are created normally, no error is logged, and no notification is ever sent. The object definitions, notification templates and all four object actions arrive automatically from the site initializer — only the webhook swap in step 7 is manual, and only on a local bundle.
+
+> **Redeploying over an older install?** The steps above assume a fresh site. An environment built before the Objects switch carries hand-made object actions that the site initializer will not replace — see [Upgrading an environment built before the Objects switch](#upgrading-an-environment-built-before-the-objects-switch).
+
+To confirm the pipeline end to end: subscribe to a thread, reply to it **as a different user** (the author is always excluded), then check `GET /o/notification/v1.0/notification-queue-entries` — it should gain two rows for that subject, one `type=email` and one `type=userNotification`. **Four** rows means a duplicate action survived the upgrade.
 
 ---
 
@@ -150,11 +178,11 @@ Users can @mention each other in a topic or reply body, similar to the legacy Me
 - **Composing** — typing `@` in the body editor opens a caret-anchored dropdown of users, searched live via `GET /o/headless-admin-user/v1.0/sites/{siteId}/user-accounts`. The search is scoped to **members of the current site** (not the whole company) and requests only the fields the picker renders (`fields=id,givenName,familyName,name,alternateName,image`) for smaller, faster responses — the email address is deliberately not fetched here, since the microservice resolves it server-side from the mentioned user's screen name. Matching uses an OData prefix `filter` (`startswith(...)` across `name`, `givenName`, `familyName`, and `alternateName`, i.e. the display-name fields and the screen name), so partial input matches the start of any of those fields (e.g. "jo" → "John", "do" → "Doe"). `startswith` maps to a prefix wildcard (`q*`) that the search index resolves efficiently — unlike `contains`'s leading wildcard (`*q*`), which forces a term-dictionary scan — while still fitting type-ahead, where users type names/handles from the start. (OData function names are lowercase and case-sensitive — it must be `startswith`, not `startsWith`.) The query is lowercased to match the lowercased `*_sortable` index fields these OData fields map to. Email is intentionally excluded from matching so the picker can't be used to probe users by email address. Arrow keys / Enter (or a click) select one. The picker works with both the legacy CKEditor 4 and CKEditor 5 (the LPD-11235 flag decides which the server renders): caret detection uses the browser Selection API, while insertion uses each editor's own API (`model.insertContent` for CKEditor 5, `insertHtml` for CKEditor 4).
 - **Storage** — a mention is stored as an anchor whose href carries the mentioned user's screen name: `<a class="forums-mention" href="#mention-{screenName}">@Jane Doe</a>`. The href fragment is the reliable channel across editor versions — CKEditor 5's schema may strip `class`/`data-*` attributes on serialization, but the anchor href survives — so downstream parsing keys off the `#mention-{screenName}` pattern rather than a data attribute. The screen name (rather than the numeric id) is used because it is a filterable/indexed field, which lets the microservice resolve mentions with a single site-scoped query.
 - **Display** — because bodies are injected as HTML, mentions render automatically as highlighted, non-navigating chips in the Message Detail view (the `#mention-` href is neutralized with `preventDefault`).
-- **Notification** — mentioning a user notifies them by **email and in-portal bell notification**, reusing the same [Forums Microservice](#forums-microservice-client-extension) path as subscriptions. The microservice's `MentionService` parses the `#mention-{screenName}` handles from the posted body and resolves them with a single `GET /o/headless-admin-user/v1.0/sites/{siteId}/user-accounts` query filtered on `alternateName`, **scoped to members of the post's site**. Because the query is site-scoped, a handle for a non-member (e.g. one injected into the body via the REST API) does not match and is dropped, so a crafted body cannot notify or probe users outside the site. The author and anyone already notified as a topic subscriber are excluded before sending; for a new topic's opening post, the parent category's subscribers (already notified of the topic by the new-message action) are excluded too, so a category subscriber who is also @mentioned is not notified twice. Editing a post also delivers mentions: an On After Update action diffs the edited body's mentions against the prior body's, so a newly-added `@mention` notifies that user while everyone already mentioned is left alone. As with subscription notifications, this requires the microservice and the [`forum-subscriptions`](#forum-subscriptions-restbuilder-osgi-module-forum-subscriptions) module to be running — see [The Feature Gap](#the-feature-gap).
+- **Notification** — mentioning a user notifies them by **email and in-portal bell notification**, reusing the same [Forums Microservice](#forums-microservice-client-extension) path as subscriptions. The microservice's `MentionService` parses the `#mention-{screenName}` handles from the posted body and resolves them with a single `GET /o/headless-admin-user/v1.0/sites/{siteId}/user-accounts` query filtered on `alternateName`, **scoped to members of the post's site**. Because the query is site-scoped, a handle for a non-member (e.g. one injected into the body via the REST API) does not match and is dropped, so a crafted body cannot notify or probe users outside the site. The author and anyone already notified as a topic subscriber are excluded before sending. Editing a post also delivers mentions: an On After Update action diffs the edited body's mentions against the prior body's, so a newly-added `@mention` notifies that user while everyone already mentioned is left alone. Mentions are delivered through the same `ForumNotification` object as subscriptions, so this requires the microservice to be running — see [The Feature Gap](#the-feature-gap).
 
 > **Mention search requires `User` view permission:** the picker calls `GET /o/headless-admin-user/v1.0/sites/{siteId}/user-accounts`, which runs a *permission-filtered* user search — the `siteId` only narrows the results, it does not by itself grant visibility. The controlling permission is **`View` on the `com.liferay.portal.kernel.model.User` resource** (checked at company scope). A caller without it sees only themselves (and users in organizations they manage, via `UserSearchPermissionFilterContributor`), so the dropdown shows "No users found" — being a member of the same site is **not** sufficient on its own. To enable mentions for all members, grant a Regular Role they hold the `User → View` permission (Control Panel → Roles → *[role]* → Define Permissions → Users and Organizations → User → View).
 >
-> Note this `User` view grant is **company-scoped, not per-site** — Liferay has no built-in "only see users of my own sites" permission for this endpoint. It lets members search all users in the company (the endpoint then narrows the *returned* results to the current site). If that is too broad, front the search with a custom microservice endpoint that runs with service credentials and returns only site members — the same pattern used for [subscriber discovery](#forum-subscriptions-restbuilder-osgi-module-forum-subscriptions).
+> Note this `User` view grant is **company-scoped, not per-site** — Liferay has no built-in "only see users of my own sites" permission for this endpoint. It lets members search all users in the company (the endpoint then narrows the *returned* results to the current site). If that is too broad, front the search with a custom microservice endpoint that runs with service credentials and returns only site members.
 >
 > **Workaround — scope visibility via an Organization:** `UserSearchPermissionFilterContributor` also grants a caller visibility of users in any **Organization** where they hold the `MANAGE_USERS` permission. So instead of the company-wide `User → View` grant, you can assign the forum's users to a dedicated Organization and grant members `MANAGE_USERS` on it (Control Panel → Roles → *[role]* → Define Permissions → Users and Organizations → Organization → Manage Users). Members can then search/mention exactly the users in that Organization — visibility scoped to the group rather than the whole company. The trade-off is that `MANAGE_USERS` is a management-level permission (it also allows administering those user accounts), so grant it only where that is acceptable.
 
@@ -333,14 +361,18 @@ The `setup/util/` directory contains cleanup and teardown scripts.
 
 ## Forum Subscription Notifications: Filling a DXP Feature Gap
 
-Email and in-portal notifications for forum subscriptions look like a basic feature, but they **cannot be built on Liferay DXP's published APIs alone**. The platform records that a user has subscribed to a topic, yet it gives an off-portal integration no supported way to act on those subscriptions. This is a genuine gap in DXP — not a shortcoming of this project — and it is the reason two of the artifacts here exist purely as a workaround.
+Email and in-portal notifications for forum subscriptions look like a basic feature, but they **cannot be built on Liferay DXP's published APIs alone**. The platform records that a user has subscribed to a topic, yet it gives an off-portal integration no supported way to act on those subscriptions. This is a genuine gap in DXP — not a shortcoming of this project.
 
-The two components below are a cooperating pair that together close the gap:
+No portal-side OSGi artifact is involved: the capability is delivered entirely by Client Extensions.
 
-- the [Forums Microservice](#forums-microservice-client-extension) — a Spring Boot Client Extension that orchestrates and delivers the notifications; and
-- the [`forum-subscriptions` REST Builder module](#forum-subscriptions-restbuilder-osgi-module-forum-subscriptions) — a portal-side module that supplies the headless endpoints the microservice needs but DXP does not publish.
+- a **`ForumSubscription` custom Object** that stores who is subscribed to which topic, maintained by the fragments through the Objects REST API; and
+- a **`ForumNotification` custom Object** whose *Notification Object Actions* deliver the email and the in-portal notification, with the [Forums Microservice](#forums-microservice-client-extension) writing one row per recipient.
 
-Read [The Feature Gap](#the-feature-gap) first for *why* this workaround is necessary; the two component sections that follow describe *how* it is implemented.
+The Objects, notification templates and object actions ship in the site initializer — a plain zip, installable anywhere. The [Forums Microservice](#forums-microservice-client-extension) is a *microservice* client extension, deployed as a container via [`LCP.json`](client-extensions/forums-microservice/LCP.json), so it additionally requires an environment that provisions container client extensions. Confirm that against the target subscription before relying on it for a Marketplace listing.
+
+Note that delivery itself now happens entirely in the site-initializer half. The microservice only computes recipients — read the subscribers, resolve the @mentions, exclude the author, write one row each — so if a container Client Extension turns out to be unavailable, the surface left to replace is far smaller than the deleted OSGi module was.
+
+Read [The Feature Gap](#the-feature-gap) first for *why* this shape is necessary; the sections that follow describe *how* it is implemented.
 
 ### The Feature Gap
 
@@ -350,35 +382,57 @@ When building the microservice to deliver email/in-portal notifications to forum
 
 **2. No off-portal way to create in-portal notifications.** Creating an in-portal (bell-panel) notification requires the internal `UserNotificationEventLocalService`, which a microservice running outside the portal JVM cannot invoke directly.
 
-Two workarounds were considered for the subscriber-discovery problem:
+Two approaches were considered:
 
-**Workaround 1 -- "Forum Subscription" Object (Not implemented -- see Workaround 2 instead)**
+**Rejected -- REST Builder endpoints.** Liferay's **REST Builder** can generate a custom headless API that delegates to `SubscriptionLocalService`, so subscription state stays in Liferay's native store with no sync concerns. This project shipped that approach originally, as a `forum-subscriptions` OSGi module exposing `GET /messages/{messageId}/subscribers` and `POST /web-notifications`. The blocker is packaging: REST Builder modules are traditional OSGi artifacts, not Client Extensions, so they **cannot be deployed on Liferay SaaS**. A SaaS-installable Marketplace app must be client-extension-only, so the module was removed.
 
-Introduce a new `ForumSubscription` Liferay Object with fields for `subscriberUserId`, `messageERC` (the subscribed topic), and `siteId`. When a user subscribes or unsubscribes, the fragment calls `POST` / `DELETE` on `/o/c/forumsubscriptions/` to maintain the record. The Spring Boot microservice (triggered by an Object Action on `ForumMessage → On After Add`) then queries `GET /o/c/forumsubscriptions/?filter=messageERC eq '{erc}'` to obtain the full subscriber list and fans out the notifications. This is entirely within the Objects + headless stack and requires no portal-side code changes, but it means subscription state is owned by a custom Object rather than Liferay's native subscription infrastructure, and the two can drift if users subscribe through any other surface (e.g., via the legacy Message Boards portlet).
+**Implemented -- custom Objects + a Notification Object Action.**
 
-**Workaround 2 -- REST Builder Endpoints (Implemented)**
+*Gap 1 (subscriber discovery)* is closed by a **`ForumSubscription`** Object (ERC `FORUM-SUBSCRIPTION`) holding a `subscriberUserId` and a cascade-delete `oneToMany` relationship from `ForumThread` (`REL-THREAD-SUBSCRIPTIONS`). The `forums-message-detail` and `forums-message-composer` fragments create and delete rows through `/o/c/forumsubscriptions`, and the microservice reads them with an OData filter on `r_threadSubscriptions_c_forumThreadId`.
 
-Use Liferay's **REST Builder** code-generation tool (an OSGi module deployed to the portal) to generate a custom headless API that delegates to `SubscriptionLocalService`. A thin `GET /o/forum-subscriptions/v1.0/threads/{threadId}/subscribers` endpoint can call `SubscriptionLocalServiceUtil.getSubscriptions(companyId, ForumThread.class.getName(), threadId)` server-side and return the subscriber user IDs or email addresses. The Spring Boot microservice then calls this custom endpoint instead of the missing platform one, keeping subscription state in Liferay's native store with no sync concerns. The trade-off is that REST Builder modules are traditional OSGi artifacts — not Client Extensions — so they cannot be deployed on Liferay SaaS and require a self-hosted or PaaS environment.
+*Gap 2 (in-portal notifications)* is closed by a **`ForumNotification`** Object (ERC `FORUM-NOTIFICATION`) carrying `recipientUserId`, `notificationSubject`, `notificationBody` and `notificationUrl`. Two **Notification Object Actions** on its *On After Add* trigger — one of `type: email`, one of `type: userNotification` — deliver both channels from the notification templates in [`site-initializer/notification-templates`](client-extensions/forums-site-initializer/site-initializer/notification-templates). The in-portal channel needs no `UserNotificationEventLocalService` and no custom notification handler: Liferay renders the bell entry itself.
 
-**This project includes Workaround 2.** The [`forum-subscriptions` module](#forum-subscriptions-restbuilder-osgi-module-forum-subscriptions) delegates to `SubscriptionLocalService`, so subscription state stays in Liferay's native store with no drift; the same module also adds the batch web-notification endpoint that solves limitation 2. The only cost is the SaaS restriction noted above — which is precisely why this whole capability is framed as filling a gap rather than as a first-class feature.
+The microservice's only job is fan-out — one `ForumNotification` row per recipient.
+
+**How each template addresses its recipient.** The two channels do *not* work the same way, because `recipientUserId` is a plain `LongInteger` field and its term renders a number:
+
+| Template | `recipientType` | Recipient | Why |
+| :--- | :--- | :--- | :--- |
+| Web | `term` | `[%FORUMNOTIFICATION_RECIPIENTUSERID%]` | A `userNotification` identifies its user by id, so the number is exactly what it needs. |
+| Email | `email` | `[%FORUMNOTIFICATION_RECIPIENTEMAILADDRESS%]` | An email `To` needs an address, and the term for a `LongInteger` field cannot produce one. |
+
+So the microservice **does** handle email addresses: `ForumNotificationService` resolves them from `/o/headless-admin-user/v1.0/user-accounts` (chunked, 50 ids per query) and writes `recipientEmailAddress` onto each row. A recipient that does not resolve simply gets no email; their bell notification still fires.
+
+> Addressing both channels by term — which would keep addresses out of the row entirely — needs `recipientUserId` to become a **relationship to the User system object** rather than a `LongInteger`. The email template could then use `[%FORUMNOTIFICATION_RECIPIENTUSER_EMAILADDRESS%]` and the `recipientEmailAddress` field would be deleted along with the lookup. That change is not made here.
+
+**Drift.** Because the custom Object is now the source of truth, `enableObjectEntrySubscription` is set to `false` on `ForumThread` and `ForumMessage`. That removes the OOTB `subscribe`/`unsubscribe` HATEOAS actions, so there is no second surface that could write subscription state and no way for the two stores to disagree.
+
+**Migration.** Existing rows in Liferay's native `Subscription` table are *not* migrated — users subscribed before this change re-subscribe through the UI.
+
+**Retention & visibility.** A recipient is only notified if they can `VIEW` the triggering entry, so the `User` role is granted model-scoped `VIEW` on `ForumNotification`. That grant is company-wide — the same shape that gives `Guest` read access to every `ForumThread` — so be clear about what it means:
+
+> **Any authenticated user can read an un-purged `ForumNotification` row**, including its `recipientEmailAddress`, `notificationSubject` and `notificationBody`. `GET /o/c/forumnotifications` is enough, and `enableIndexSearch` is `true`.
+>
+> The only thing keeping that window small is the purge: the microservice deletes each row as soon as its actions have run (`forums.notification.purge`, default `true`). It is best-effort, not a guarantee — the flag is documented as something to turn **off** where object actions run asynchronously, and a failed delete is logged and swallowed rather than retried. Rows persist for as long as the purge is disabled or failing.
+>
+> Removing the grant is not obviously safe either, since delivery is said to depend on it. Taking the addresses out of the row is the fix that does not trade one problem for the other — see the note on the User relationship above.
 
 ### Forums Microservice (Client Extension)
 
-The [`forums-microservice`](client-extensions/forums-microservice) is a Spring Boot Client Extension that delivers **email and in-portal notifications** to forum subscribers when new content is posted. It is the server-side realization of *Workaround 2* described under [The Feature Gap](#the-feature-gap): it queries the custom `forum-subscriptions` REST Builder module to discover a topic's (or category's) subscribers, then fans out notifications.
+The [`forums-microservice`](client-extensions/forums-microservice) is a Spring Boot Client Extension that works out **who** should be notified when new content is posted. It reads the topic's subscribers from `/o/c/forumsubscriptions`, resolves any @mentions, and writes one `ForumNotification` row per recipient. Delivery itself is done by the Notification Object Actions on that object — see [The Feature Gap](#the-feature-gap).
 
-Liferay invokes it through three **Object Action** webhooks, each secured by a signed OAuth2 JWT that the Spring Boot OAuth2 resource server validates against the DXP's JWKS endpoint:
+Liferay invokes it through two **Object Action** webhooks, each secured by a signed OAuth2 JWT that the Spring Boot OAuth2 resource server validates against the DXP's JWKS endpoint:
 
 | Object Action | Endpoint | Trigger | Notifies |
 | :--- | :--- | :--- | :--- |
 | New Reply | `POST /object-action/new-reply` | A `ForumMessage` is created (On After Add) | Subscribers of the parent `ForumThread` (excluding the reply author), plus users @mentioned in the body |
-| New Message | `POST /object-action/new-message` | A root `ForumThread` (topic) is created (On After Add) | Subscribers of the parent `ForumCategory` (excluding the topic author) |
 | Updated Reply | `POST /object-action/updated-reply` | A `ForumMessage` is updated (On After Update) | Only users @mentioned by the edit — mentions already present before the edit are diffed out (using the payload's `originalObjectEntry`), so no one is re-pinged; subscribers are not re-notified |
 
 A `GET /ready` endpoint serves as the unauthenticated readiness/liveness probe. The service listens on port **58082**.
 
-Email is delivered through Liferay's notification-queue REST API (`/o/notification/v1.0/notification-queue-entries`) and in-portal notifications through the custom `forum-subscriptions` module — there is no direct SMTP.
+There is no direct SMTP: email is sent by the `email` Notification Object Action, which enqueues through Liferay's own notification queue.
 
-> **Dependency:** the microservice cannot work on its own. It relies on the custom [`forum-subscriptions` REST Builder module](#forum-subscriptions-restbuilder-osgi-module-forum-subscriptions) for two capabilities missing from Liferay's published headless APIs: **subscriber discovery** (`GET /messages/{messageId}/subscribers`) and **batch in-portal notifications** (`POST /web-notifications`). See that section for what each endpoint does, why the platform forces a custom module, and the SaaS caveat.
+> Subscriptions are **thread-level only**. There is no category-level subscription, so creating a topic notifies no one — which is why there is no longer a `new-message` object action.
 
 #### Building & deploying
 
@@ -401,57 +455,71 @@ cp .env.example .env   # then edit values
 
 `run-local.sh` also synthesizes the LXC "configtree" metadata locally (from `LIFERAY_DXP_HOST` / `LIFERAY_DXP_PROTOCOL`) that Liferay PaaS would otherwise mount, so JWT validation points at the right DXP instance. The `.env` file holds secrets and is gitignored; [`.env.example`](client-extensions/forums-microservice/.env.example) is the committed template.
 
+##### Binding the object actions locally
+
+On PaaS/SaaS the `objectAction` client extension registers an executor and Liferay calls the handlers with a signed JWT — nothing extra to do. **On a local bundle that registration does not happen**; the portal log shows:
+
+```
+No object action executor found with company ID <id> and key liferay-forumsmicroservice-object-action-new-reply
+```
+
+The site initializer ships both actions ([`forum-message.object-actions.json`](client-extensions/forums-site-initializer/site-initializer/object-actions/forum-message.object-actions.json)) bound to the client-extension executor, which is correct for PaaS/SaaS. Locally you must **replace** them — delete `ForumMessageNewReply` and `ForumMessageUpdatedReply`, then recreate them as plain **webhooks** (Control Panel → Objects → ForumMessage → Actions):
+
+| Trigger | Executor | URL |
+| :--- | :--- | :--- |
+| On After Add | Webhook | `http://localhost:58082/object-action/new-reply` |
+| On After Update | Webhook | `http://localhost:58082/object-action/updated-reply` |
+
+Leaving the imported versions in place is what produces the error above on every reply; adding webhooks *alongside* them would fire each handler twice.
+
+Verify with `GET /o/notification/v1.0/notification-queue-entries` after a reply: two rows should appear for that subject, one `type=email` and one `type=userNotification`. If none do, `grep "No object action executor found"` in the portal log distinguishes "the trigger never fired" from a failure further down; the microservice log covers the rest.
+
+A webhook carries no JWT, so `run-local.sh` activates the **`local` Spring profile** ([`application-local.properties`](client-extensions/forums-microservice/src/main/resources/application-local.properties)), which adds the two object-action paths to `liferay.oauth.urls.excludes`. The handlers treat the JWT as optional and fall back to the configured Basic Auth credentials for their own outbound calls.
+
+> This loosening is **local-only**. `application-default.properties` — the profile PaaS/SaaS runs — excludes only `/ready`, leaving the object-action endpoints behind OAuth2. Verified by running the jar under each profile: `default` returns `401` on an unauthenticated object-action POST, `default,local` returns `200`.
+
+##### Upgrading an environment built before the Objects switch
+
+Everything above describes a **fresh** install, where the site initializer is the only thing that creates object actions. Before the Objects switch it shipped no `object-actions/` folder at all, so an environment set up against the older README has *hand-made* actions that nobody deletes on redeploy. Clear them out first — **Control Panel → Objects → ForumMessage / ForumThread → Actions**:
+
+| Leftover | Where | Symptom if left in place |
+| :--- | :--- | :--- |
+| Hand-made `new-reply` / `updated-reply` | `ForumMessage` | Fires **alongside** the imported action — the initializer upserts by external reference code, so a different ERC survives. Two `ForumNotification` rows per recipient, so two emails and two bell notifications per reply. Nothing is logged. |
+| `new-message` | `ForumThread` | The executor and the `/object-action/new-message` route were both removed. Bound to the client-extension executor it logs `No object action executor found ... key liferay-forumsmicroservice-object-action-new-message` on every topic creation; bound as a local webhook it instead gets a silent **404** back from the microservice. |
+
+The duplicate case is the one to watch: it is silent, and `grep "No object action executor found"` does not catch the stale local webhook either. Check the Actions tab directly rather than relying on the log.
+
+There is no category-level subscription — see the note under [Object Actions](#forums-microservice-client-extension) — which is why `new-message` has no replacement.
+
 #### Environment variables
 
 | Variable | Required | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `LIFERAY_BASE_URL` | No | `http://localhost:8080` | Base URL of the Liferay instance. Used both to locate the OAuth2 JWKS endpoint for JWT validation and as the target for headless API callbacks (subscriber lookup, message-title fetch, notification-queue POST, display-page URL construction). |
+| `LIFERAY_BASE_URL` | No | `http://localhost:8080` | Base URL of the Liferay instance. Used both to locate the OAuth2 JWKS endpoint for JWT validation and as the target for headless API callbacks (subscriber lookup, message-title fetch, ForumNotification writes, display-page URL construction). |
 | `LIFERAY_DXP_HOST` | No | `localhost:8080` | DXP host written into the local LXC configtree by `run-local.sh` (local dev only). Must match the instance that issues the object-action JWTs. On PaaS this is provided by the platform. |
 | `LIFERAY_DXP_PROTOCOL` | No | `http` | Protocol (`http`/`https`) paired with `LIFERAY_DXP_HOST` for the local configtree. |
 | `LIFERAY_HEADLESS_API_USER` | No | `test@liferay.com` | Basic Auth username used **only** as a fallback when no JWT is forwarded on a call (e.g. manual/local testing). Normally the incoming object-action JWT is forwarded as a Bearer token. |
 | `LIFERAY_HEADLESS_API_PASSWORD` | No | `test` | Basic Auth password for the fallback above. |
-| `FORUMS_EMAIL_FROM` | No | `forums-noreply@example.xyz` | From address on outbound notification emails. |
-| `FORUMS_EMAIL_FROM_NAME` | No | `Community Forums` | From display name on outbound notification emails. |
+| `FORUMS_NOTIFICATION_PURGE` | No | `true` | Deletes each `ForumNotification` row once its object actions have run. Set to `false` if the environment executes object actions asynchronously. |
 | `FORUMS_SITE_BASE_URL` | No | `https://www.example.xyz` | Base URL prepended to the site-relative display-page path in email/web notifications, so links resolve to the deployed site. |
 
 The OAuth user-agent application (ERC `liferay-forumsmicroservice-oauth-application-user-agent`) and the two object actions are declared in [`client-extension.yaml`](client-extensions/forums-microservice/client-extension.yaml); the remaining settings live in [`application-default.properties`](client-extensions/forums-microservice/src/main/resources/application-default.properties).
 
-### Forum Subscriptions RESTBuilder OSGi Module (`forum-subscriptions`)
+### Notification Templates & Object Actions
 
-[`modules/forum-subscriptions`](modules/forum-subscriptions) is a custom **REST Builder** OSGi module that publishes the small headless API the [Forums Microservice](#forums-microservice-client-extension) depends on. It exists to fill the two gaps in Liferay's *published* headless APIs detailed under [The Feature Gap](#the-feature-gap):
+The site initializer ships both halves of the delivery path:
 
-1. **Subscriber discovery.** When users subscribe to a topic, Liferay records it in its internal `Subscription` table via the built-in Object subscribe/unsubscribe HATEOAS actions — but **no published REST endpoint returns the list of users subscribed to a given Object entry**. The only headless subscription endpoint, `my-user-account/subscriptions`, is scoped to the *calling* user. So the microservice has no platform way to learn *whom* to notify.
-2. **Web (in-portal) notifications.** Creating an in-portal (bell-panel) notification requires the internal `UserNotificationEventLocalService`, which an off-portal microservice cannot invoke directly.
-
-The module is generated and structured like Liferay's own headless modules, as four sub-modules:
-
-| Sub-module | Role |
+| Path | Role |
 | :--- | :--- |
-| `headless-forum-subscriptions-api` | DTOs (`Subscriber`, `WebNotification`) and resource interfaces. |
-| `headless-forum-subscriptions-impl` | The OSGi runtime: JAX-RS application, resource implementations, and the notification handler. The only hand-written logic lives here. |
-| `headless-forum-subscriptions-client` | Generated Java client JAR (`com.liferay.headless.forum.subscriptions.client`). |
-| `headless-forum-subscriptions-test` | Generated integration-test scaffolding. |
+| [`notification-templates/forum-notification-email/`](client-extensions/forums-site-initializer/site-initializer/notification-templates/forum-notification-email) | `type: email` template (ERC `FORUM-NOTIFICATION-EMAIL-TEMPLATE`). `notification-template.json` holds the subject and recipient; the body is the sibling `en_US.html`. |
+| [`notification-templates/forum-notification-web/`](client-extensions/forums-site-initializer/site-initializer/notification-templates/forum-notification-web) | `type: userNotification` template (ERC `FORUM-NOTIFICATION-WEB-TEMPLATE`) for the bell panel. |
+| [`object-actions/forum-notification.object-actions.json`](client-extensions/forums-site-initializer/site-initializer/object-actions/forum-notification.object-actions.json) | The two `objectActionExecutorKey: notification` actions bound to `ForumNotification` → *On After Add*. |
 
-All endpoints live under the base URI **`/o/forum-subscriptions/v1.0`** and are guarded by the OAuth2 scope **`Liferay.Forum.Subscriptions.everything`** — the same scope the microservice's user-agent application requests.
+Both templates address the recipient with the term `[%FORUMNOTIFICATION_RECIPIENTUSERID%]`, and interpolate `[%FORUMNOTIFICATION_NOTIFICATIONSUBJECT%]`, `[%FORUMNOTIFICATION_NOTIFICATIONBODY%]` and `[%FORUMNOTIFICATION_NOTIFICATIONURL%]` from the row the microservice wrote.
 
-#### Endpoints
+The email body links to the discussion with an `<a href="[%FORUMNOTIFICATION_NOTIFICATIONURL%]">` anchor rather than relying on the notification's own link target, because the triggering `ForumNotification` entry has no display page of its own.
 
-| Method & path | Backing platform service | Purpose |
-| :--- | :--- | :--- |
-| `GET /messages/{messageId}/subscribers` | `SubscriptionLocalService` | Returns `{userId, emailAddress}` for every user subscribed to the `ForumThread` with the given ID. |
-| `POST /web-notifications` | `UserNotificationEventLocalService` | Creates an in-portal notification (`subject` / `body` / `url`) for a batch of `userIds`. |
-
-`SubscriberResourceImpl` resolves the `ForumThread` object definition by ERC (`FORUM-THREAD`) to obtain its internal class name, then calls `SubscriptionLocalService.getSubscriptions(companyId, className, messageId)` — the exact server-side call the missing headless endpoint would have made — and maps each `Subscription`'s user to an email address.
-
-`WebNotificationResourceImpl` fans the request out to `UserNotificationEventLocalService.sendUserNotificationEvents(...)` once per user ID under the portlet name `LiferayForums`. A companion `ForumUserNotificationHandler` (registered for that same portlet name) interprets those events into the clickable entries that appear in the user's notification (bell) panel.
-
-#### Permissions & access
-
-Access is gated by the **`Liferay.Forum.Subscriptions.everything` OAuth2 scope** — only a token carrying that scope (i.e. the microservice's user-agent application) can reach the endpoints. The resource implementations then call Liferay *LocalServices* (`SubscriptionLocalService`, `UserLocalService`, `UserNotificationEventLocalService`), which run below the permission layer, so within that scope the microservice can read any topic's subscriber list and notify any user — exactly the back-end-service behavior it needs. Treat the scope as sensitive: anything holding a token with it can enumerate subscriber email addresses and push notifications to arbitrary users, so grant it only to the microservice's user-agent app — never to end-user-facing roles.
-
-> The `LiberalPermissionChecker` in the generated `*ResourceFactoryImpl` is standard Liferay REST Builder boilerplate for the framework's optional permission-bypass path. It is **not** engaged here: the builder defaults to `checkPermissions = true` and nothing in this module opts out, so requests run with the caller's real permission checker.
-
-> **SaaS caveat:** because this is a traditional OSGi artifact rather than a Client Extension, it requires a self-hosted or PaaS environment and **cannot be deployed on Liferay SaaS** — the underlying reason this whole approach is framed as a workaround. See [The Feature Gap](#the-feature-gap).
+The From address and display name are the `from` / `fromName` recipient settings in `forum-notification-email/notification-template.json` — edit them there (or in Control Panel → Notifications → Templates), not in the microservice.
 
 ---
 
@@ -490,3 +558,43 @@ The [Thread Priorities](#thread-priorities) select in the composer is only shown
 The "Recent Activity" tab (formerly "Top Replies") sorts messages using `lastPostDate:desc`. This functions as a "Recently Active" feed rather than filtering for the highest volume of total replies. A new message with 1 reply will surface above an older message with 100 replies.
 
 **Option:** If a true "Top Replied" filter is desired, the sorting criteria must be changed to target a `replyCount` metric. The Liferay Object definition would need an aggregated integer field for total replies that can be passed to the OData `sort` parameter (e.g., `sort=replyCount:desc`), or rely on a Client Extension to dynamically aggregate and sort this information.
+
+### The Site Initializer Caps Out at 12 Object Definitions
+
+On `dxp-2026.q1.4-lts` this site initializer publishes **12** object definitions successfully and fails at **13**, regardless of what the thirteenth contains. The failure surfaces during `publishObjectDefinitions` as an `ObjectDefinitionFriendlyURLSeparatorException` ("Other asset types may use this prefix") thrown against an *unrelated* object — `ForumMessage` — so the message points nowhere near the actual cause.
+
+It is not a content problem. It reproduces with a trivial thirteenth object that has no relationships, no permissions and no actions, and it survives renaming objects, changing their derived URL separators, and reordering the definition files. Publishing definitions individually over the Object Admin REST API does not hit it, which suggests the fault is in the initializer's bulk create-then-publish loop rather than in object count itself.
+
+This is why the unused `ForumMailingList` object was removed when `ForumSubscription` and `ForumNotification` were added: 11 − 1 + 2 = 12. **Adding any further object definition to this site initializer will break deployment on a clean bundle.** If more objects are needed, ship them outside the initializer — a batch client extension (`*.batch-engine-data.json`, the pattern Liferay's own CMP and DSR initializers use) or a post-deploy Object Admin REST call — rather than trying to fit under the cap.
+
+> `friendlyURLSeparator` in an object-definition JSON is **ignored on create**; it only applies via `PATCH`. Setting it in the initializer to dodge the collision has no effect.
+
+### The Bell Notification Is Not Clickable
+
+The in-portal notification arrives with the correct text, but clicking it only marks it read and returns to the notifications list — it does not open the discussion. The email carries a working `<a href="[%FORUMNOTIFICATION_NOTIFICATIONURL%]">` link, so the discussion is always one click away there; the bell entry is an in-portal signal only.
+
+The notification is raised against the `ForumNotification` row, which has no display page for the handler to resolve a URL from. Two configuration-level fixes were tried and **both are dead ends** — recorded here so they are not re-attempted:
+
+| Attempt | Result |
+| :--- | :--- |
+| Put an `<a href>` in the notification **subject** | The bell escapes HTML; the raw `<a href="…">…</a>` renders as visible text. |
+| **Retarget** the action at `ForumThread` via `objectDefinitionExternalReferenceCode` | Delivers correctly, and `[%FORUMNOTIFICATION_*%]` terms still resolve from the source object — but the link is unchanged. The href remains `markNotificationAsRead` + a redirect back to the notifications page, with no destination, even though the thread has a valid display page and friendly URL. |
+
+Retargeting also cannot supply a per-row thread id: `predefinedValues` evaluates `value` as a DDM expression only when `inputAsValue` is false, and that path throws `DDMExpressionException: … _ddmExpressionFieldAccessor is null` for a bare field reference. `inputAsValue: true` takes the value literally, which is useless for an id that changes per notification.
+
+**Option:** a custom `UserNotificationHandler` could build the link, but it is an OSGi component — reintroducing the SaaS packaging blocker that [The Feature Gap](#the-feature-gap) exists to remove. Not worth it for a link while email already carries one.
+
+### HSQLDB Produces Misleading Failures
+
+The default bundle ships with HSQLDB, which has twice produced symptoms that look like application bugs:
+
+- **A wedged write session blocks every subsequent write.** Reads keep working normally, so the forum browses fine while `POST /o/c/forumnotifications/...` hangs indefinitely — no error, no log entry, the request simply never returns. The notification pipeline then appears broken when the database is at fault. A portal restart clears it; a thread dump shows the request parked in `org.hsqldb.lib.CountUpDownLatch.await`.
+- **DDL is not transactional.** When publishing an object definition fails partway, the table and indexes it created survive the rollback. Retrying then fails with `object name already exists: O_<id>_<OBJECT>_L` — a different error than the original cause, which sends debugging in the wrong direction.
+
+**Option:** switch to MySQL — `portal-ext.properties` already carries a commented-out block for it. Worth doing before debugging anything write-heavy. As a rule of thumb on this bundle: a hung write, or a repeat failure that differs from the first, is usually the database rather than the app.
+
+### `forum-stats` Is Not SaaS-Installable
+
+[`modules/forum-stats`](modules/forum-stats) counts a user's messages with an in-JVM `ModelListener` on `ObjectEntry`. Like the removed `forum-subscriptions` module it is a traditional OSGi artifact, so it **cannot be deployed on Liferay SaaS** and must be left out of a Marketplace listing. The counter simply does not advance without it.
+
+**Option:** move the increment to the microservice, behind an Object Action webhook on `ForumMessage → On After Add` — the same shape the notification path now uses.

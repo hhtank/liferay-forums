@@ -2,17 +2,14 @@
 package com.liferay.demo.forums.controller;
 
 import com.liferay.client.extension.util.spring.boot3.BaseRestController;
-import com.liferay.demo.forums.service.EmailNotificationService;
-import com.liferay.demo.forums.service.SubscriptionService;
-import com.liferay.demo.forums.service.Subscriber;
+import com.liferay.demo.forums.service.ForumNotificationService;
 import com.liferay.demo.forums.service.MentionService;
-import com.liferay.demo.forums.service.WebNotificationService;
+import com.liferay.demo.forums.service.SubscriptionService;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,27 +30,20 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Object Action Client Extension handlers for forum email notifications.
+ * Object Action Client Extension handlers for forum notifications.
  *
- * <p>Three endpoints are registered in {@code client-extension.yaml}:</p>
+ * <p>Two endpoints are registered in {@code client-extension.yaml}:</p>
  * <ul>
- *   <li>{@code /object-action/new-reply} — triggered when a
- *       {@code ForumMessage} Object entry is created.  Notifies all users who
- *       subscribed to the parent {@code ForumThread}, plus any users
+ *   <li>{@code /object-action/new-reply} — a {@code ForumMessage} entry was
+ *       created. Notifies the parent thread's subscribers plus anyone
  *       @mentioned in the body.</li>
- *   <li>{@code /object-action/new-message} — triggered when a new root
- *       {@code ForumThread} Object entry is created (i.e. a new topic).
- *       Notifies all users who subscribed to the parent
- *       {@code ForumCategory}.</li>
- *   <li>{@code /object-action/updated-reply} — triggered when a
- *       {@code ForumMessage} Object entry is updated.  Notifies only the users
- *       @mentioned by the edit (mentions present before the edit are diffed
- *       out); subscribers are not re-notified.</li>
+ *   <li>{@code /object-action/updated-reply} — a {@code ForumMessage} entry was
+ *       edited. Notifies only the mentions the edit added.</li>
  * </ul>
  *
- * <p>Liferay invokes these endpoints with a signed JWT (verified by the
- * Spring Boot OAuth2 resource server) and a JSON body containing the full
- * Object entry fields.</p>
+ * <p>Delivery is not performed here: recipients are written as ForumNotification
+ * entries, whose Notification Object Actions send the email and the in-portal
+ * notification.</p>
  *
  * @author Neil Griffin
  */
@@ -62,41 +52,37 @@ public class ForumNotificationController extends BaseRestController {
 
 	/**
 	 * Handles a new ForumMessage being created.
-	 *
-	 * <p>Expected payload fields (in addition to standard Object entry
-	 * metadata):</p>
-	 * <ul>
-	 *   <li>{@code body} — HTML body of the reply</li>
-	 *   <li>{@code r_threadMessages_c_forumThreadId} — FK to the parent
-	 *       ForumThread</li>
-	 *   <li>{@code creator.name} / {@code creator.givenName} — reply author</li>
-	 * </ul>
 	 */
 	@PostMapping("/object-action/new-reply")
 	public ResponseEntity<String> onNewReply(
 			@AuthenticationPrincipal Jwt jwt, @RequestBody String json)
 		throws Exception {
 
-		log(jwt, _log, json);
+		String authToken = _authToken(jwt);
+
+		if (jwt != null) {
+			log(jwt, _log, json);
+		}
+		else {
+			_log.info(json);
+		}
 
 		JSONObject payload = new JSONObject(json);
-
-		// Parse the reply payload
 
 		JSONObject objectEntry = payload.optJSONObject("objectEntry");
 		JSONObject values = (objectEntry != null) ? objectEntry.optJSONObject("values") : null;
 
-		long parentMessageId = 0L;
+		long threadId = 0L;
 		String replyBody = "";
 		String rawReplyBody = "";
 
 		if (values != null) {
-			parentMessageId = values.optLong("r_threadMessages_c_forumThreadId", 0L);
+			threadId = values.optLong("r_threadMessages_c_forumThreadId", 0L);
 			rawReplyBody = values.optString("body", "");
 			replyBody = _stripHtml(rawReplyBody);
 		}
 
-		if (parentMessageId == 0L) {
+		if (threadId == 0L) {
 			_log.warn("onNewReply: missing r_threadMessages_c_forumThreadId in payload");
 
 			return new ResponseEntity<>(json, HttpStatus.OK);
@@ -106,27 +92,27 @@ public class ForumNotificationController extends BaseRestController {
 		JSONObject creator = (dto != null) ? dto.optJSONObject("creator") : null;
 
 		String replyAuthor = _resolveAuthorName(creator);
-
-		// Notify subscribers
-
-		List<Subscriber> subscribers = _subscriptionService.getSubscribers(
-			parentMessageId, jwt.getTokenValue());
-
-		// Exclude the reply author from notifications. The object-action
-		// payload's creator carries the author's user id but no email, so
-		// exclusion is keyed on user id.
-
 		long authorUserId = _resolveCreatorUserId(creator);
 
-		subscribers.removeIf(s -> s.getUserId() == authorUserId);
+		// ForumSubscription is site-scoped, so the scope is needed before the subscriber
+		// query. The object-action payload normally carries it, so this costs no
+		// extra call.
 
-		List<String> subscriberEmails = subscribers.stream()
-			.map(Subscriber::getEmailAddress)
-			.toList();
+		JSONObject site = null;
+		long siteId = _resolveSiteId(dto, null);
 
-		// Parsing the body for @mentions is a cheap local regex (no network),
-		// so do it up front: if there are neither subscribers nor mentions to
-		// notify, skip the title lookup, site lookup and URL construction.
+		if (siteId <= 0L) {
+			site = _fetchSite(dto, authToken);
+			siteId = _resolveSiteId(dto, site);
+		}
+
+		List<Long> subscribers = _subscriptionService.getSubscriberUserIds(
+			threadId, siteId, authToken);
+
+		subscribers.removeIf(userId -> userId == authorUserId);
+
+		// Mention parsing is a local regex, so do it before any REST call: with
+		// neither subscribers nor mentions there is nothing left to look up.
 
 		Set<String> mentionedScreenNames = _extractCappedMentions(rawReplyBody);
 
@@ -134,87 +120,55 @@ public class ForumNotificationController extends BaseRestController {
 			return new ResponseEntity<>(json, HttpStatus.OK);
 		}
 
-		// Fetch the parent ForumThread to get the topic title
-
-		String messageTitle = _fetchMessageTitle(parentMessageId, jwt.getTokenValue());
+		String messageTitle = _fetchMessageTitle(threadId, authToken);
 
 		if (messageTitle == null) {
-			_log.warn("onNewReply: could not fetch title for messageId=" + parentMessageId);
+			_log.warn("onNewReply: could not fetch title for threadId=" + threadId);
 
 			messageTitle = "Forum Discussion";
 		}
 
-		// Fetch the site once; both the display page URL and the mention site
-		// scope read from it, so a reply makes a single site lookup.
+		if (site == null) {
+			site = _fetchSite(dto, authToken);
+		}
 
-		JSONObject site = _fetchSite(dto, jwt.getTokenValue());
+		String url = _constructDisplayPageUrl(payload, dto, site, authToken);
 
-		String url = _constructDisplayPageUrl(payload, dto, site, jwt.getTokenValue());
 		_log.info("Constructed Display Page URL for Reply: " + url);
 
-		_emailNotificationService.sendNewReplyNotification(
-			messageTitle, parentMessageId, replyAuthor, replyBody, subscriberEmails, url, jwt.getTokenValue());
+		_forumNotificationService.notifyAll(
+			subscribers, siteId, "Re: " + messageTitle,
+			replyAuthor + " posted a new reply to \"" + messageTitle + "\": " +
+				_truncate(replyBody, 300),
+			url, authToken);
 
-		// Send web notifications
-
-		_webNotificationService.sendNotifications(
-			subscribers, "New Reply: " + messageTitle,
-			replyAuthor + " has replied to the discussion.", url, jwt.getTokenValue());
-
-		// Notify any users @mentioned in the post body. This also covers a new
-		// topic's opening post, since its root ForumMessage triggers this same
-		// handler. Subscribers already notified above are excluded to avoid a
-		// duplicate ping. Mentions are resolved only against members of the
-		// site the post belongs to, so a handle injected into the body cannot
-		// notify users outside the site.
-
-		long siteId = _resolveSiteId(dto, site);
-
-		// When this message is a new topic's opening post, the new-message
-		// handler has already notified the parent category's subscribers of the
-		// topic. Add them to the mention exclusion set so a category subscriber
-		// who is also @mentioned in the opening post is not notified twice. This
-		// does not apply to ordinary replies, whose category subscribers are
-		// never notified of the reply.
-
-		List<Subscriber> mentionExclusions = subscribers;
-
-		if (!mentionedScreenNames.isEmpty() &&
-			_isThreadOpeningPost(parentMessageId, jwt.getTokenValue())) {
-
-			List<Subscriber> categorySubscribers = _getCategorySubscribers(
-				parentMessageId, jwt.getTokenValue());
-
-			if (!categorySubscribers.isEmpty()) {
-				mentionExclusions = new ArrayList<>(subscribers);
-
-				mentionExclusions.addAll(categorySubscribers);
-			}
-		}
+		// Subscribers already notified above are excluded so a subscriber who is
+		// also mentioned is not pinged twice.
 
 		_notifyMentions(
 			mentionedScreenNames, messageTitle, replyAuthor, replyBody, url,
-			mentionExclusions, authorUserId, siteId, jwt.getTokenValue());
+			subscribers, authorUserId, siteId, authToken);
 
 		return new ResponseEntity<>(json, HttpStatus.OK);
 	}
 
 	/**
-	 * Handles an existing ForumMessage being edited.
-	 *
-	 * <p>Only @mentions <em>added by the edit</em> are notified. The mentions
-	 * in the prior body — carried in the update payload as
-	 * {@code originalObjectEntry} — are diffed out, so editing a post never
-	 * re-pings a user who was already mentioned. Subscribers are not
-	 * re-notified on edits (only new-reply/new-message do that); this handler
-	 * exists solely to deliver mentions that a subsequent edit introduces.</p>
+	 * Handles an existing ForumMessage being edited. Only mentions <em>added by
+	 * the edit</em> are notified; subscribers are never re-notified.
 	 */
 	@PostMapping("/object-action/updated-reply")
 	public ResponseEntity<String> onUpdatedReply(
 			@AuthenticationPrincipal Jwt jwt, @RequestBody String json)
 		throws Exception {
 
-		log(jwt, _log, json);
+		String authToken = _authToken(jwt);
+
+		if (jwt != null) {
+			log(jwt, _log, json);
+		}
+		else {
+			_log.info(json);
+		}
 
 		JSONObject payload = new JSONObject(json);
 
@@ -225,12 +179,12 @@ public class ForumNotificationController extends BaseRestController {
 		JSONObject originalValues = (originalObjectEntry != null) ?
 			originalObjectEntry.optJSONObject("values") : null;
 
-		long parentMessageId = 0L;
+		long threadId = 0L;
 		String rawReplyBody = "";
 		String rawOriginalBody = "";
 
 		if (values != null) {
-			parentMessageId = values.optLong("r_threadMessages_c_forumThreadId", 0L);
+			threadId = values.optLong("r_threadMessages_c_forumThreadId", 0L);
 			rawReplyBody = values.optString("body", "");
 		}
 
@@ -238,16 +192,14 @@ public class ForumNotificationController extends BaseRestController {
 			rawOriginalBody = originalValues.optString("body", "");
 		}
 
-		if (parentMessageId == 0L) {
+		if (threadId == 0L) {
 			_log.warn("onUpdatedReply: missing r_threadMessages_c_forumThreadId in payload");
 
 			return new ResponseEntity<>(json, HttpStatus.OK);
 		}
 
-		// Notify only the mentions this edit added: diff the new body's mentions
-		// against the prior body's, so already-mentioned users are never
-		// re-pinged. Both extractions are cheap local regexes, so a no-op edit
-		// (or one that adds no mentions) makes no REST calls.
+		// Diff the new body's mentions against the prior body's, so an
+		// already-mentioned user is never re-pinged.
 
 		Set<String> addedMentions =
 			_mentionService.extractMentionedScreenNames(rawReplyBody);
@@ -268,35 +220,30 @@ public class ForumNotificationController extends BaseRestController {
 		long authorUserId = _resolveCreatorUserId(creator);
 		String replyBody = _stripHtml(rawReplyBody);
 
-		String messageTitle = _fetchMessageTitle(parentMessageId, jwt.getTokenValue());
+		String messageTitle = _fetchMessageTitle(threadId, authToken);
 
 		if (messageTitle == null) {
 			messageTitle = "Forum Discussion";
 		}
 
-		JSONObject site = _fetchSite(dto, jwt.getTokenValue());
+		JSONObject site = _fetchSite(dto, authToken);
 
-		String url = _constructDisplayPageUrl(payload, dto, site, jwt.getTokenValue());
-		_log.info("Constructed Display Page URL for Edited Reply: " + url);
-
+		String url = _constructDisplayPageUrl(payload, dto, site, authToken);
 		long siteId = _resolveSiteId(dto, site);
 
-		// An edit pre-notifies no one, so the only exclusion is the author
-		// (handled inside _notifyMentions via authorUserId).
+		_log.info("Constructed Display Page URL for Edited Reply: " + url);
 
 		_notifyMentions(
-			addedMentions, messageTitle, replyAuthor, replyBody, url,
-			List.of(), authorUserId, siteId, jwt.getTokenValue());
+			addedMentions, messageTitle, replyAuthor, replyBody, url, List.of(),
+			authorUserId, siteId, authToken);
 
 		return new ResponseEntity<>(json, HttpStatus.OK);
 	}
 
 	/**
 	 * Extracts the @mention screen names from a post body, capped at
-	 * {@code _MAX_MENTIONS}. Capping bounds the notification fan-out (a body
-	 * crafted with many handles cannot be used to spam) and keeps the
-	 * site-scoped resolution query's "or" clauses within a sane URL length.
-	 * Insertion order is preserved, so the first mentions in the body win.
+	 * {@code _MAX_MENTIONS} so a crafted body cannot be used to spam. Insertion
+	 * order is preserved, so the first mentions in the body win.
 	 */
 	private Set<String> _extractCappedMentions(String rawBody) {
 		return _capMentions(_mentionService.extractMentionedScreenNames(rawBody));
@@ -317,211 +264,71 @@ public class ForumNotificationController extends BaseRestController {
 	}
 
 	/**
-	 * Notifies users @mentioned in a post body, by email and in-portal
-	 * notification, excluding the author and anyone in
-	 * {@code alreadyNotified} (e.g. topic subscribers already pinged).
+	 * Notifies users @mentioned in a post, excluding the author and anyone in
+	 * {@code alreadyNotified}.
 	 */
 	private void _notifyMentions(
 		Set<String> mentionedScreenNames, String messageTitle, String author,
-		String bodyPreview, String url, List<Subscriber> alreadyNotified,
+		String bodyPreview, String url, List<Long> alreadyNotified,
 		long authorUserId, long siteId, String authToken) {
 
 		if (mentionedScreenNames.isEmpty()) {
 			return;
 		}
 
-		List<Subscriber> mentioned = _mentionService.resolveMentions(
+		List<Long> mentioned = _mentionService.resolveMentions(
 			mentionedScreenNames, siteId, authToken);
 
-		Set<Long> excludeUserIds = new HashSet<>();
+		List<Long> recipients = new ArrayList<>();
 
-		for (Subscriber subscriber : alreadyNotified) {
-			excludeUserIds.add(subscriber.getUserId());
-		}
-
-		List<Subscriber> recipients = new ArrayList<>();
-
-		for (Subscriber subscriber : mentioned) {
-			if (excludeUserIds.contains(subscriber.getUserId())) {
+		for (Long userId : mentioned) {
+			if (alreadyNotified.contains(userId)) {
 				continue;
 			}
 
-			if ((authorUserId > 0) &&
-				(subscriber.getUserId() == authorUserId)) {
-
+			if ((authorUserId > 0) && (userId == authorUserId)) {
 				continue;
 			}
 
-			recipients.add(subscriber);
+			recipients.add(userId);
 		}
 
 		if (recipients.isEmpty()) {
 			return;
 		}
 
-		List<String> recipientEmails = recipients.stream()
-			.map(Subscriber::getEmailAddress)
-			.toList();
-
-		_emailNotificationService.sendMentionNotification(
-			messageTitle, author, bodyPreview, recipientEmails, url, authToken);
-
-		_webNotificationService.sendNotifications(
-			recipients, author + " mentioned you",
-			author + " mentioned you in: " + messageTitle, url, authToken);
+		_forumNotificationService.notifyAll(
+			recipients, siteId, author + " mentioned you in: " + messageTitle,
+			author + " mentioned you in \"" + messageTitle + "\": " +
+				_truncate(bodyPreview, 300),
+			url, authToken);
 	}
 
 	/**
-	 * Handles a new root ForumThread (topic) being created.
-	 *
-	 * <p>Expected payload fields:</p>
-	 * <ul>
-	 *   <li>{@code messageTitle} — topic title</li>
-	 *   <li>{@code id} — ForumThread ID</li>
-	 *   <li>{@code r_categoryThreads_c_forumCategoryId} — FK to the parent
-	 *       ForumCategory</li>
-	 *   <li>{@code creator.name} / {@code creator.givenName} — topic author</li>
-	 * </ul>
+	 * The bearer token to forward, or {@code null} when the action arrived
+	 * without one (a plain webhook). {@code LiferayApiClient} then falls back
+	 * to the configured Basic Auth credentials.
 	 */
-	@PostMapping("/object-action/new-message")
-	public ResponseEntity<String> onNewMessage(
-			@AuthenticationPrincipal Jwt jwt, @RequestBody String json)
-		throws Exception {
-
-		log(jwt, _log, json);
-
-		JSONObject payload = new JSONObject(json);
-
-		JSONObject objectEntry = payload.optJSONObject("objectEntry");
-		JSONObject values = (objectEntry != null) ? objectEntry.optJSONObject("values") : null;
-
-		long messageId = payload.optLong("id", 0L);
-		String messageTitle = "Forum Discussion";
-		long categoryId = 0L;
-
-		if (values != null) {
-			messageTitle = values.optString("messageTitle", "Forum Discussion");
-			categoryId = values.optLong("r_categoryThreads_c_forumCategoryId", 0L);
+	private String _authToken(Jwt jwt) {
+		if (jwt == null) {
+			return null;
 		}
 
-		JSONObject dto = payload.optJSONObject("objectEntryDTOForumThread");
-		JSONObject creator = (dto != null) ? dto.optJSONObject("creator") : null;
-
-		String author = _resolveAuthorName(creator);
-
-		if (categoryId == 0L) {
-			_log.debug("onNewMessage: no categoryId for messageId=" + messageId + "; skipping category subscriber notification");
-
-			return new ResponseEntity<>(json, HttpStatus.OK);
-		}
-
-		// Category-level subscriptions use the category's ID as the content key.
-		// The c_forumsubscription object must include entries for category
-		// subscriptions as well as message-level subscriptions.
-
-		List<Subscriber> subscribers = _subscriptionService.getSubscribers(
-			categoryId, jwt.getTokenValue());
-
-		long authorUserId = _resolveCreatorUserId(creator);
-
-		subscribers.removeIf(s -> s.getUserId() == authorUserId);
-
-		if (subscribers.isEmpty()) {
-			return new ResponseEntity<>(json, HttpStatus.OK);
-		}
-
-		List<String> subscriberEmails = subscribers.stream()
-			.map(Subscriber::getEmailAddress)
-			.toList();
-
-		JSONObject site = _fetchSite(dto, jwt.getTokenValue());
-
-		String url = _constructDisplayPageUrl(payload, dto, site, jwt.getTokenValue());
-		_log.info("Constructed Display Page URL for Topic: " + url);
-
-		_emailNotificationService.sendNewTopicNotification(
-			"Forum Category", messageTitle, messageId, author, subscriberEmails, url, jwt.getTokenValue());
-
-		// Send web notifications
-
-		_webNotificationService.sendNotifications(
-			subscribers, "New Topic: " + messageTitle,
-			author + " has started a new discussion.", url, jwt.getTokenValue());
-
-		return new ResponseEntity<>(json, HttpStatus.OK);
+		return jwt.getTokenValue();
 	}
 
-	private String _fetchMessageTitle(long messageId, String authToken) {
+	private String _fetchMessageTitle(long threadId, String authToken) {
 		try {
 			String response = _liferayApiClient.get(
-				"/o/c/forumthreads/" + messageId + "?fields=messageTitle",
+				"/o/c/forumthreads/" + threadId + "?fields=messageTitle",
 				authToken);
 
 			return new JSONObject(response).optString("messageTitle", null);
 		}
 		catch (Exception e) {
-			_log.error("Failed to fetch ForumThread title for id=" + messageId + ": " + e.getMessage());
+			_log.error("Failed to fetch ForumThread title for id=" + threadId + ": " + e.getMessage());
 
 			return null;
-		}
-	}
-
-	/**
-	 * Returns {@code true} when the given thread has exactly one message, which
-	 * identifies a new topic's opening post: the opening post is created before
-	 * any reply, so at the moment its On After Add action fires it is the only
-	 * message in the thread.
-	 */
-	private boolean _isThreadOpeningPost(long threadId, String authToken) {
-		try {
-			String filter = URLEncoder.encode(
-				"r_threadMessages_c_forumThreadId eq '" + threadId + "'",
-				StandardCharsets.UTF_8);
-
-			String response = _liferayApiClient.get(
-				"/o/c/forummessages?fields=id&pageSize=1&filter=" + filter,
-				authToken);
-
-			return new JSONObject(response).optInt("totalCount", 0) == 1;
-		}
-		catch (Exception exception) {
-			_log.warn(
-				"Could not determine opening-post status for thread " +
-					threadId + ": " + exception.getMessage());
-
-			return false;
-		}
-	}
-
-	/**
-	 * Fetches the subscribers of the thread's parent category (the users the
-	 * new-message handler notifies when a topic is created), for exclusion from
-	 * opening-post mention notifications.
-	 */
-	private List<Subscriber> _getCategorySubscribers(
-		long threadId, String authToken) {
-
-		try {
-			String response = _liferayApiClient.get(
-				"/o/c/forumthreads/" + threadId +
-					"?fields=r_categoryThreads_c_forumCategoryId",
-				authToken);
-
-			long categoryId = new JSONObject(response).optLong(
-				"r_categoryThreads_c_forumCategoryId", 0L);
-
-			if (categoryId == 0L) {
-				return List.of();
-			}
-
-			return _subscriptionService.getSubscribers(categoryId, authToken);
-		}
-		catch (Exception exception) {
-			_log.warn(
-				"Could not fetch category subscribers for thread " + threadId +
-					": " + exception.getMessage());
-
-			return List.of();
 		}
 	}
 
@@ -556,6 +363,19 @@ public class ForumNotificationController extends BaseRestController {
 		return 0L;
 	}
 
+	/**
+	 * Percent-encodes a value interpolated into a request path. {@code URLEncoder}
+	 * targets query strings and emits "+" for a space, which is not a space in a
+	 * path.
+	 */
+	private String _encodePathSegment(String value) {
+		return URLEncoder.encode(
+			value, StandardCharsets.UTF_8
+		).replace(
+			"+", "%20"
+		);
+	}
+
 	private String _stripHtml(String html) {
 		if ((html == null) || html.isBlank()) {
 			return "";
@@ -564,11 +384,21 @@ public class ForumNotificationController extends BaseRestController {
 		return html.replaceAll("<[^>]+>", " ").replaceAll("\\s{2,}", " ").trim();
 	}
 
+	private String _truncate(String text, int maxLength) {
+		if (text == null) {
+			return "";
+		}
+
+		if (text.length() <= maxLength) {
+			return text;
+		}
+
+		return text.substring(0, maxLength) + "...";
+	}
+
 	/**
-	 * Fetches the entry's site once (id + friendly URL path) so the display
-	 * page URL and the mention site scope can share a single lookup. Returns
-	 * {@code null} when the scope's external reference code is missing or the
-	 * site cannot be fetched.
+	 * Fetches the entry's site once (id + friendly URL path) so the display page
+	 * URL and the mention site scope share a single lookup.
 	 */
 	private JSONObject _fetchSite(JSONObject dto, String authToken) {
 		if (dto == null) {
@@ -589,10 +419,14 @@ public class ForumNotificationController extends BaseRestController {
 			return null;
 		}
 
+		// LiferayApiClient runs with URI encoding disabled so pre-encoded OData
+		// filters survive, which leaves interpolated segments like this one to
+		// encode themselves.
+
 		try {
 			String siteResponse = _liferayApiClient.get(
-				"/o/headless-admin-site/v1.0/sites/" + siteErc +
-					"?fields=id,friendlyUrlPath",
+				"/o/headless-admin-site/v1.0/sites/" +
+					_encodePathSegment(siteErc) + "?fields=id,friendlyUrlPath",
 				authToken);
 
 			return new JSONObject(siteResponse);
@@ -607,11 +441,9 @@ public class ForumNotificationController extends BaseRestController {
 	}
 
 	/**
-	 * Resolves the numeric group id of the site a post belongs to. Prefers a
-	 * numeric scope id carried in the payload, otherwise reads it from the
-	 * already-fetched {@code site} (see {@link #_fetchSite}), so no additional
-	 * REST call is made. Returns {@code 0} when the site cannot be determined,
-	 * so mention resolution fails closed.
+	 * Resolves the group id of the site a post belongs to, preferring the
+	 * payload's numeric scope id over the already-fetched site. Returns
+	 * {@code 0} when unknown, so mention resolution fails closed.
 	 */
 	private long _resolveSiteId(JSONObject dto, JSONObject site) {
 		if (dto != null) {
@@ -638,9 +470,8 @@ public class ForumNotificationController extends BaseRestController {
 			return "";
 		}
 
-		// When the site friendly URL is known, fall back to the site home rather
-		// than an empty (dead) link if the entry-specific parts of the display
-		// page URL cannot be resolved.
+		// Fall back to the site home rather than a dead link when the
+		// entry-specific parts cannot be resolved.
 
 		String siteFriendlyUrl = (site != null) ?
 			site.optString("friendlyUrlPath", "") : "";
@@ -656,7 +487,6 @@ public class ForumNotificationController extends BaseRestController {
 				return siteFallbackUrl;
 			}
 
-			// Fetch object definition friendly URL separator
 			String objDefResponse = _liferayApiClient.get(
 				"/o/object-admin/v1.0/object-definitions/" + objectDefinitionId + "?fields=friendlyURLSeparator", authToken);
 			String urlSeparator = new JSONObject(objDefResponse).optString("friendlyURLSeparator", "");
@@ -677,13 +507,10 @@ public class ForumNotificationController extends BaseRestController {
 	private com.liferay.demo.forums.client.LiferayApiClient _liferayApiClient;
 
 	@Autowired
-	private EmailNotificationService _emailNotificationService;
+	private ForumNotificationService _forumNotificationService;
 
 	@Autowired
 	private MentionService _mentionService;
-
-	@Autowired
-	private WebNotificationService _webNotificationService;
 
 	@Autowired
 	private SubscriptionService _subscriptionService;

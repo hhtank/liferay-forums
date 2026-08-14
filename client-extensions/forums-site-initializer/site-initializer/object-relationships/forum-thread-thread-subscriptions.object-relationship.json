@@ -1,0 +1,22 @@
+{
+	"objectDefinitionSystem2": false,
+	"parameterObjectFieldName": "",
+	"parameterObjectFieldId": 0,
+	"label": {
+		"en_US": "Thread Subscriptions"
+	},
+	"reverse": false,
+	"type": "oneToMany",
+	"externalReferenceCode": "REL-THREAD-SUBSCRIPTIONS",
+	"edge": false,
+	"objectDefinitionModifiable2": true,
+	"system": false,
+	"name": "threadSubscriptions",
+	"objectDefinitionScope2": "site",
+	"deletionType": "cascade",
+	"objectDefinitionExternalReferenceCode1": "FORUM-THREAD",
+	"objectDefinitionExternalReferenceCode2": "FORUM-SUBSCRIPTION",
+	"objectDefinitionName2": "ForumSubscription",
+	"objectDefinitionId1": "[$OBJECT_DEFINITION_ID:ForumThread$]",
+	"objectDefinitionId2": "[$OBJECT_DEFINITION_ID:ForumSubscription$]"
+}

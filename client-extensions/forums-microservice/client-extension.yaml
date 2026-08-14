@@ -10,8 +10,8 @@ liferay-forumsmicroservice-oauth-application-user-agent:
         -   Liferay.Headless.Object.everything
         -   c_forumthread.everything
         -   c_forummessage.everything
-        -   Liferay.Forum.Subscriptions.everything
-        -   Liferay.Headless.User.Notification.everything
+        -   c_forumsubscription.everything
+        -   c_forumnotification.everything
         -   Liferay.Headless.Admin.Site.everything
         -   Liferay.Object.Admin.REST.everything
     type: oAuthApplicationUserAgent
@@ -19,11 +19,6 @@ liferay-forumsmicroservice-object-action-new-reply:
     name: ForumsMicroservice Object Action New Reply
     oAuth2ApplicationExternalReferenceCode: liferay-forumsmicroservice-oauth-application-user-agent
     resourcePath: /object-action/new-reply
-    type: objectAction
-liferay-forumsmicroservice-object-action-new-message:
-    name: ForumsMicroservice Object Action New Message
-    oAuth2ApplicationExternalReferenceCode: liferay-forumsmicroservice-oauth-application-user-agent
-    resourcePath: /object-action/new-message
     type: objectAction
 liferay-forumsmicroservice-object-action-updated-reply:
     name: ForumsMicroservice Object Action Updated Reply
