@@ -33,7 +33,6 @@ import com.liferay.fragment.service.FragmentEntryLinkLocalServiceUtil
 // (on a local dev box, that's you).
 def workspaceFragmentsPath = System.getProperty("user.home") + "/Assets/liferay-forums/client-extensions/forums-site-initializer/site-initializer/fragments/company/forums/fragments"
 def collectionKey = "forums"
-def globalGroupId = 20120L
 
 // Edit this list to control which fragments get pushed.
 def fragments = [
@@ -47,12 +46,17 @@ def fragments = [
     "forums-related-topics",
 ]
 
-def collections = FragmentCollectionLocalServiceUtil.getFragmentCollections(globalGroupId, 0, Integer.MAX_VALUE)
+// Search every group: the collection lives in the global group, whose id
+// differs per instance, so it is resolved rather than hardcoded.
+def collections = FragmentCollectionLocalServiceUtil.getFragmentCollections(-1, -1)
 def col = collections.find { it.fragmentCollectionKey == collectionKey }
 if (col == null) {
-    out.println("FAIL FragmentCollection '" + collectionKey + "' not found at globalGroupId=" + globalGroupId)
+    out.println("FAIL FragmentCollection '" + collectionKey + "' not found in any group")
+    out.println("Available keys: " + collections.collect { it.fragmentCollectionKey }.join(", "))
     return
 }
+out.println("Found collection '" + collectionKey + "' at groupId=" + col.groupId)
+out.println("Reading from: " + workspaceFragmentsPath)
 
 def entries = FragmentEntryLocalServiceUtil.getFragmentEntries(col.fragmentCollectionId)
 def allLinks = FragmentEntryLinkLocalServiceUtil.getFragmentEntryLinks(-1, -1)
@@ -60,7 +64,7 @@ def allLinks = FragmentEntryLinkLocalServiceUtil.getFragmentEntryLinks(-1, -1)
 def deployFragment = { String fragmentKey ->
     def fragmentDir = new File(workspaceFragmentsPath + "/" + fragmentKey)
     if (!fragmentDir.exists()) {
-        out.println("WARN " + fragmentKey + " - directory not found on disk")
+        out.println("WARN " + fragmentKey + " - not found at " + fragmentDir.getAbsolutePath())
         return
     }
 
