@@ -60,14 +60,15 @@ public class LiferayApiClient {
 		_log.debug("GET {}", path);
 
 		try {
-			return _webClient.get()
-				.uri(path)
-				.headers(h -> _setAuthHeader(h, authToken))
-				.retrieve()
-				.bodyToMono(String.class)
-				.block();
+			return _get(path, authToken);
 		}
 		catch (WebClientResponseException e) {
+			if (_staleToken(e, authToken)) {
+				_log.warn("GET {} → 401; retrying without the bearer token", path);
+
+				return _get(path, null);
+			}
+
 			if (e.getStatusCode().value() == 404) {
 				_log.debug("GET {} → 404 NOT_FOUND", path);
 			}
@@ -83,15 +84,15 @@ public class LiferayApiClient {
 		_log.debug("POST {}", path);
 
 		try {
-			return _webClient.post()
-				.uri(path)
-				.headers(h -> _setAuthHeader(h, authToken))
-				.bodyValue(jsonBody)
-				.retrieve()
-				.bodyToMono(String.class)
-				.block();
+			return _post(path, authToken, jsonBody).block();
 		}
 		catch (WebClientResponseException e) {
+			if (_staleToken(e, authToken)) {
+				_log.warn("POST {} → 401; retrying without the bearer token", path);
+
+				return _post(path, null, jsonBody).block();
+			}
+
 			_log.error("POST {} failed: {} {}", path, e.getStatusCode(), e.getResponseBodyAsString());
 
 			throw e;
@@ -104,6 +105,75 @@ public class LiferayApiClient {
 	 * is cold — nothing is sent until it is subscribed.
 	 */
 	public Mono<String> postAsync(String path, String authToken, Object jsonBody) {
+		return _post(path, authToken, jsonBody)
+			.onErrorResume(
+				WebClientResponseException.class,
+				e -> {
+					if (!_staleToken(e, authToken)) {
+						return Mono.error(e);
+					}
+
+					_log.warn("POST {} → 401; retrying without the bearer token", path);
+
+					return _post(path, null, jsonBody);
+				});
+	}
+
+	/**
+	 * Non-blocking DELETE. Cold — nothing is sent until subscribed.
+	 */
+	public Mono<Void> deleteAsync(String path, String authToken) {
+		return _delete(path, authToken)
+			.onErrorResume(
+				WebClientResponseException.class,
+				e -> {
+					if (!_staleToken(e, authToken)) {
+						return Mono.error(e);
+					}
+
+					_log.warn("DELETE {} → 401; retrying without the bearer token", path);
+
+					return _delete(path, null);
+				});
+	}
+
+	/**
+	 * Whether a failure looks like a bearer token that has gone stale, and is
+	 * therefore worth one retry without it.
+	 *
+	 * <p>The notification fan-out runs after the object action has already been
+	 * answered, so a forwarded JWT can expire while its task waits in the queue.
+	 * {@link #_setAuthHeader} only falls back to Basic Auth when no token is
+	 * supplied, so an expired-but-present token fails instead of degrading —
+	 * dropping it lets the fallback take over.</p>
+	 *
+	 * <p>This only helps where Basic Auth credentials are actually configured.
+	 * On PaaS/SaaS they usually are not, which is why the retry logs at WARN:
+	 * there it costs one extra call and the real defence against a stale token
+	 * is the short executor queue.</p>
+	 */
+	private boolean _staleToken(
+		WebClientResponseException exception, String authToken) {
+
+		if (exception.getStatusCode().value() != 401) {
+			return false;
+		}
+
+		return (authToken != null) && !authToken.isBlank();
+	}
+
+	private String _get(String path, String authToken) {
+		return _webClient.get()
+			.uri(path)
+			.headers(h -> _setAuthHeader(h, authToken))
+			.retrieve()
+			.bodyToMono(String.class)
+			.block();
+	}
+
+	private Mono<String> _post(
+		String path, String authToken, Object jsonBody) {
+
 		return _webClient.post()
 			.uri(path)
 			.headers(h -> _setAuthHeader(h, authToken))
@@ -112,10 +182,7 @@ public class LiferayApiClient {
 			.bodyToMono(String.class);
 	}
 
-	/**
-	 * Non-blocking DELETE. Cold — nothing is sent until subscribed.
-	 */
-	public Mono<Void> deleteAsync(String path, String authToken) {
+	private Mono<Void> _delete(String path, String authToken) {
 		return _webClient.delete()
 			.uri(path)
 			.headers(h -> _setAuthHeader(h, authToken))
