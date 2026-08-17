@@ -21,8 +21,10 @@ import org.apache.commons.logging.LogFactory;
 import org.json.JSONObject;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,6 +46,14 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Delivery is not performed here: recipients are written as ForumNotification
  * entries, whose Notification Object Actions send the email and the in-portal
  * notification.</p>
+ *
+ * <p>Both endpoints acknowledge immediately and fan out on
+ * {@code forumNotificationExecutor}. Liferay calls an object action
+ * synchronously and waits, so doing the fan-out inline put every subscriber
+ * lookup, notification write and purge inside the poster's "Posting..." spinner.
+ * Nothing here reads the entry that triggered the action — the title comes from
+ * the parent ForumThread and the display URL from the payload — so there is no
+ * commit ordering to respect.</p>
  *
  * @author Neil Griffin
  */
@@ -67,6 +77,61 @@ public class ForumNotificationController extends BaseRestController {
 			_log.info(json);
 		}
 
+		_forumNotificationExecutor.execute(
+			() -> _fanOut("new-reply", () -> _processNewReply(json, authToken)));
+
+		return new ResponseEntity<>(json, HttpStatus.OK);
+	}
+
+	/**
+	 * Handles an existing ForumMessage being edited. Only mentions <em>added by
+	 * the edit</em> are notified; subscribers are never re-notified.
+	 */
+	@PostMapping("/object-action/updated-reply")
+	public ResponseEntity<String> onUpdatedReply(
+			@AuthenticationPrincipal Jwt jwt, @RequestBody String json)
+		throws Exception {
+
+		String authToken = _authToken(jwt);
+
+		if (jwt != null) {
+			log(jwt, _log, json);
+		}
+		else {
+			_log.info(json);
+		}
+
+		_forumNotificationExecutor.execute(
+			() -> _fanOut(
+				"updated-reply", () -> _processUpdatedReply(json, authToken)));
+
+		return new ResponseEntity<>(json, HttpStatus.OK);
+	}
+
+	/**
+	 * Runs a fan-out off the request thread. Nothing observes these tasks — the
+	 * object action was answered before this ran — so a failure that escapes here
+	 * is invisible everywhere else, and the elapsed line is the only evidence the
+	 * work happened at all.
+	 */
+	private void _fanOut(String handler, Runnable task) {
+		long start = System.currentTimeMillis();
+
+		try {
+			task.run();
+		}
+		catch (Throwable throwable) {
+			_log.error(
+				"Unhandled failure in " + handler + " fan-out", throwable);
+		}
+		finally {
+			_log.info(
+				handler + " fan-out finished in " +
+					(System.currentTimeMillis() - start) + " ms");
+		}
+	}
+
+	private void _processNewReply(String json, String authToken) {
 		JSONObject payload = new JSONObject(json);
 
 		JSONObject objectEntry = payload.optJSONObject("objectEntry");
@@ -85,7 +150,7 @@ public class ForumNotificationController extends BaseRestController {
 		if (threadId == 0L) {
 			_log.warn("onNewReply: missing r_threadMessages_c_forumThreadId in payload");
 
-			return new ResponseEntity<>(json, HttpStatus.OK);
+			return;
 		}
 
 		JSONObject dto = payload.optJSONObject("objectEntryDTOForumMessage");
@@ -117,7 +182,7 @@ public class ForumNotificationController extends BaseRestController {
 		Set<String> mentionedScreenNames = _extractCappedMentions(rawReplyBody);
 
 		if (subscribers.isEmpty() && mentionedScreenNames.isEmpty()) {
-			return new ResponseEntity<>(json, HttpStatus.OK);
+			return;
 		}
 
 		String messageTitle = _fetchMessageTitle(threadId, authToken);
@@ -148,28 +213,9 @@ public class ForumNotificationController extends BaseRestController {
 		_notifyMentions(
 			mentionedScreenNames, messageTitle, replyAuthor, replyBody, url,
 			subscribers, authorUserId, siteId, authToken);
-
-		return new ResponseEntity<>(json, HttpStatus.OK);
 	}
 
-	/**
-	 * Handles an existing ForumMessage being edited. Only mentions <em>added by
-	 * the edit</em> are notified; subscribers are never re-notified.
-	 */
-	@PostMapping("/object-action/updated-reply")
-	public ResponseEntity<String> onUpdatedReply(
-			@AuthenticationPrincipal Jwt jwt, @RequestBody String json)
-		throws Exception {
-
-		String authToken = _authToken(jwt);
-
-		if (jwt != null) {
-			log(jwt, _log, json);
-		}
-		else {
-			_log.info(json);
-		}
-
+	private void _processUpdatedReply(String json, String authToken) {
 		JSONObject payload = new JSONObject(json);
 
 		JSONObject objectEntry = payload.optJSONObject("objectEntry");
@@ -195,7 +241,7 @@ public class ForumNotificationController extends BaseRestController {
 		if (threadId == 0L) {
 			_log.warn("onUpdatedReply: missing r_threadMessages_c_forumThreadId in payload");
 
-			return new ResponseEntity<>(json, HttpStatus.OK);
+			return;
 		}
 
 		// Diff the new body's mentions against the prior body's, so an
@@ -210,7 +256,7 @@ public class ForumNotificationController extends BaseRestController {
 		addedMentions = _capMentions(addedMentions);
 
 		if (addedMentions.isEmpty()) {
-			return new ResponseEntity<>(json, HttpStatus.OK);
+			return;
 		}
 
 		JSONObject dto = payload.optJSONObject("objectEntryDTOForumMessage");
@@ -236,8 +282,6 @@ public class ForumNotificationController extends BaseRestController {
 		_notifyMentions(
 			addedMentions, messageTitle, replyAuthor, replyBody, url, List.of(),
 			authorUserId, siteId, authToken);
-
-		return new ResponseEntity<>(json, HttpStatus.OK);
 	}
 
 	/**
@@ -514,6 +558,14 @@ public class ForumNotificationController extends BaseRestController {
 
 	@Autowired
 	private SubscriptionService _subscriptionService;
+
+	/* Named explicitly: Spring Boot also auto-configures a ThreadPoolTaskExecutor
+	   ("applicationTaskExecutor"). It backs off while this is the only Executor
+	   bean, but by-type injection would break the moment anything else adds one,
+	   and the leading underscore stops the by-name tiebreak from resolving it. */
+	@Autowired
+	@Qualifier("forumNotificationExecutor")
+	private ThreadPoolTaskExecutor _forumNotificationExecutor;
 
 	private static final int _MAX_MENTIONS = 25;
 

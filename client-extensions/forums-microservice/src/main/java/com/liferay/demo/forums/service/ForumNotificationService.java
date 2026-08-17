@@ -93,9 +93,20 @@ public class ForumNotificationService {
 			.blockOptional()
 			.orElse(0L);
 
-		_log.info(
-			"Forum notification sent to {}/{} recipient(s): subject=\"{}\"",
-			successCount, recipientUserIds.size(), subject);
+		// The fan-out runs after the object action has been answered, so Liferay
+		// logs success either way. Losing every recipient has to be loud here or
+		// it is recorded nowhere.
+
+		if (successCount == 0) {
+			_log.error(
+				"Forum notification reached none of {} recipient(s): subject=\"{}\"",
+				recipientUserIds.size(), subject);
+		}
+		else {
+			_log.info(
+				"Forum notification sent to {}/{} recipient(s): subject=\"{}\"",
+				successCount, recipientUserIds.size(), subject);
+		}
 	}
 
 	/**

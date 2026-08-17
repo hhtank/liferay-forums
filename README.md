@@ -430,6 +430,15 @@ Liferay invokes it through two **Object Action** webhooks, each secured by a sig
 
 A `GET /ready` endpoint serves as the unauthenticated readiness/liveness probe. The service listens on port **58082**.
 
+**Both handlers answer immediately and fan out in the background.** Liferay calls an object action *synchronously and waits for the response*, so doing the work inline put the subscriber lookup, the title/site/display-page lookups, one `ForumNotification` write **and** one purge per recipient, and then the whole mention pass, inside the poster's "Posting..." spinner. The handlers now acknowledge the action and hand the payload to a small executor (`forums.notification.async.*`).
+
+This is safe because nothing in a handler reads the entry that triggered it — the title comes from the parent `ForumThread` and the display URL from the payload — so there is no commit ordering to respect. The trade-offs:
+
+- Queue overflow **runs on the calling thread**, so an overloaded service degrades to the old inline latency rather than dropping a notification. That backpressure also keeps the queue too shallow for a forwarded JWT to expire in it; if one does, the call is retried once without the token so the Basic Auth fallback can take over — which only helps where those credentials are actually set.
+- Liferay now logs success as soon as the action is acknowledged, so **its log is no longer evidence that anything was delivered**. The microservice logs an elapsed-time line per fan-out, and an `ERROR` when a fan-out that had recipients reached none of them. The queue is in-memory: `server.shutdown=graceful` plus a 10s drain covers a rolling deploy, not a `SIGKILL`.
+
+> Not to be confused with `forums.notification.purge`. That flag is about whether **Liferay** runs the `ForumNotification` object's own notification actions asynchronously, and is unaffected by this. The row is still created, its actions still fire and it is still purged — just on a pool thread.
+
 There is no direct SMTP: email is sent by the `email` Notification Object Action, which enqueues through Liferay's own notification queue.
 
 > Subscriptions are **thread-level only**. There is no category-level subscription, so creating a topic notifies no one — which is why there is no longer a `new-message` object action.
@@ -501,6 +510,10 @@ There is no category-level subscription — see the note under [Object Actions](
 | `LIFERAY_HEADLESS_API_USER` | No | `test@liferay.com` | Basic Auth username used **only** as a fallback when no JWT is forwarded on a call (e.g. manual/local testing). Normally the incoming object-action JWT is forwarded as a Bearer token. |
 | `LIFERAY_HEADLESS_API_PASSWORD` | No | `test` | Basic Auth password for the fallback above. |
 | `FORUMS_NOTIFICATION_PURGE` | No | `true` | Deletes each `ForumNotification` row once its object actions have run. Set to `false` if the environment executes object actions asynchronously. |
+| `FORUMS_NOTIFICATION_ASYNC_CORE_SIZE` | No | `2` | Core threads on the notification fan-out pool. |
+| `FORUMS_NOTIFICATION_ASYNC_MAX_SIZE` | No | `8` | Maximum threads on that pool. |
+| `FORUMS_NOTIFICATION_ASYNC_QUEUE_CAPACITY` | No | `100` | Queued fan-outs before overflow runs on the calling thread. Short on purpose: each task retains the whole object-action payload and the container is allotted 512 MB. |
+| `FORUMS_NOTIFICATION_ASYNC_AWAIT_TERMINATION_SECONDS` | No | `10` | How long shutdown waits for queued fan-outs to drain. Keep it inside the platform's SIGTERM→SIGKILL grace period (30s by default). |
 | `FORUMS_SITE_BASE_URL` | No | `https://www.example.xyz` | Base URL prepended to the site-relative display-page path in email/web notifications, so links resolve to the deployed site. |
 
 The OAuth user-agent application (ERC `liferay-forumsmicroservice-oauth-application-user-agent`) and the two object actions are declared in [`client-extension.yaml`](client-extensions/forums-microservice/client-extension.yaml); the remaining settings live in [`application-default.properties`](client-extensions/forums-microservice/src/main/resources/application-default.properties).
