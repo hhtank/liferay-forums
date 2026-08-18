@@ -1,34 +1,35 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-var forumsMod = fragmentElement.querySelector('#forumsModeration');
+const forumsMod = fragmentElement.querySelector('#forumsModeration');
 
 if (forumsMod) {
-	var portalURL = Liferay.ThemeDisplay.getPortalURL();
-	var scopeGroupId = Liferay.ThemeDisplay.getScopeGroupId();
-	var headers = {
+	const portalURL = Liferay.ThemeDisplay.getPortalURL();
+	const scopeGroupId = Liferay.ThemeDisplay.getScopeGroupId();
+	const headers = {
 		'Accept': 'application/json',
 		'Content-Type': 'application/json'
 	};
 
 	function buildMessageHref(messageData) {
-		if (messageData && messageData.friendlyUrlPath) {
-			var siteSlug = (messageData.scopeKey || '').toLowerCase().replace(/ /g, '-');
-			return Liferay.ThemeDisplay.getPathFriendlyURLPublic() + '/' + siteSlug + '/c_forumthread/' + messageData.friendlyUrlPath;
+		const {friendlyUrlPath, scopeKey} = messageData || {};
+		if (friendlyUrlPath) {
+			const siteSlug = (scopeKey || '').toLowerCase().replace(/ /g, '-');
+			return Liferay.ThemeDisplay.getPathFriendlyURLPublic() + '/' + siteSlug + '/c_forumthread/' + friendlyUrlPath;
 		}
 		return null;
 	}
-	var cardEl = forumsMod.querySelector('.forums-moderation__card');
-	var noPermissionsEl = forumsMod.querySelector('#forumsModNoPermissions');
-	var loadingEl = forumsMod.querySelector('#forumsModLoading');
-	var flagList = forumsMod.querySelector('#forumsModFlagList');
-	var paginationNav = forumsMod.querySelector('#forumsModPagination');
-	var paginationUl = forumsMod.querySelector('#forumsModPaginationUl');
+	const cardEl = forumsMod.querySelector('.forums-moderation__card');
+	const noPermissionsEl = forumsMod.querySelector('#forumsModNoPermissions');
+	const loadingEl = forumsMod.querySelector('#forumsModLoading');
+	const flagList = forumsMod.querySelector('#forumsModFlagList');
+	const paginationNav = forumsMod.querySelector('#forumsModPagination');
+	const paginationUl = forumsMod.querySelector('#forumsModPaginationUl');
 
-	var currentFilter = 'pending'; /* 'pending' | 'validated' | 'all' */
-	var currentPage = 1;
-	var pageSize = 20;
+	let currentFilter = 'pending'; /* 'pending' | 'validated' | 'all' */
+	let currentPage = 1;
+	const pageSize = 20;
 
 	/* Reason labels map */
-	var reasonLabels = {
+	const reasonLabels = {
 		'spam': forumsMod.dataset.labelSpam || 'Spam',
 		'harmful-dangerous-acts': forumsMod.dataset.labelHarmfulDangerousActs || 'Harmful Dangerous Acts',
 		'harassment-bullying': forumsMod.dataset.labelHarassmentBullying || 'Harassment or Bullying',
@@ -38,14 +39,15 @@ if (forumsMod) {
 
 	function displayName(creator) {
 		if (!creator) return '';
-		var given = creator.givenName || '';
-		var family = creator.familyName || '';
-		return (family && family !== 'User') ? (given + ' ' + family) : (given || creator.name || '');
+		const {givenName, familyName, name} = creator;
+		const given = givenName || '';
+		const family = familyName || '';
+		return (family && family !== 'User') ? (given + ' ' + family) : (given || name || '');
 	}
 
 	function formatDate(dateStr) {
 		if (!dateStr) return '';
-		var d = new Date(dateStr);
+		const d = new Date(dateStr);
 		return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 	}
 
@@ -62,10 +64,10 @@ if (forumsMod) {
 	}
 
 	function showConfirmModal(message, confirmLabel, onConfirm) {
-		var existing = document.getElementById('forumsModConfirmModal');
+		const existing = document.getElementById('forumsModConfirmModal');
 		if (existing) existing.remove();
 
-		var modal = document.createElement('div');
+		const modal = document.createElement('div');
 		modal.id = 'forumsModConfirmModal';
 		modal.className = 'modal';
 		modal.style.display = 'flex';
@@ -105,7 +107,7 @@ if (forumsMod) {
 			</div>`;
 
 		document.body.appendChild(modal);
-		var previousFocus = document.activeElement;
+		const previousFocus = document.activeElement;
 
 		function onKeydown(e) {
 			if (e.key === 'Escape') closeModal();
@@ -133,7 +135,7 @@ if (forumsMod) {
 
 	function showToast(message) {
 		if (Liferay.Util && Liferay.Util.openToast) {
-			Liferay.Util.openToast({ message: message, type: 'success' });
+			Liferay.Util.openToast({ message, type: 'success' });
 		}
 	}
 
@@ -161,12 +163,12 @@ if (forumsMod) {
 	function renderPagination(lastPage, loadFunction) {
 		if (lastPage > 1 && paginationNav && paginationUl) {
 			paginationNav.style.display = '';
-			var pagHtml = '';
+			let pagHtml = '';
 
 			pagHtml += '<li class="page-item' + (currentPage <= 1 ? ' disabled' : '') + '">'
 				+ '<a class="page-link" href="#" data-page="' + (currentPage - 1) + '" aria-label="Previous page"><span aria-hidden="true">&laquo;</span></a></li>';
 
-			for (var p = 1; p <= lastPage && p <= 10; p++) {
+			for (let p = 1; p <= lastPage && p <= 10; p++) {
 				pagHtml += '<li class="page-item' + (p === currentPage ? ' active' : '') + '">'
 					+ '<a class="page-link" href="#" data-page="' + p + '">' + p + '</a></li>';
 			}
@@ -179,7 +181,7 @@ if (forumsMod) {
 			paginationUl.querySelectorAll('.page-link').forEach(function(link) {
 				link.addEventListener('click', function(e) {
 					e.preventDefault();
-					var p = parseInt(this.getAttribute('data-page'));
+					const p = parseInt(this.getAttribute('data-page'));
 					if (p >= 1 && p <= lastPage) {
 						currentPage = p;
 						loadFunction();
@@ -196,17 +198,17 @@ if (forumsMod) {
 		flagList.innerHTML = '';
 		if (paginationNav) paginationNav.style.display = 'none';
 
-		var url = portalURL + '/o/c/forumbans/scopes/' + scopeGroupId
+		const url = portalURL + '/o/c/forumbans/scopes/' + scopeGroupId
 			+ '?sort=dateCreated:desc'
 			+ '&page=' + currentPage
 			+ '&pageSize=' + pageSize;
 
-		Liferay.Util.fetch(url, { headers: headers, method: 'GET' })
+		Liferay.Util.fetch(url, { headers, method: 'GET' })
 		.then(function(r) { return r.json(); })
 		.then(function(data) {
 			if (loadingEl) loadingEl.style.display = 'none';
-			var items = data.items || [];
-			var lastPage = data.lastPage || 1;
+			const items = data.items || [];
+			const lastPage = data.lastPage || 1;
 
 			if (items.length === 0) {
 				flagList.innerHTML = '<div class="list-group-item text-secondary">' + (forumsMod.dataset.labelNoBans || 'No bans found.') + '</div>';
@@ -214,31 +216,33 @@ if (forumsMod) {
 			}
 
 			items.forEach(function(ban) {
-				var item = document.createElement('div');
+				const {actions, banUserId, dateCreated} = ban;
+
+				const item = document.createElement('div');
 				item.className = 'list-group-item forums-moderation__flag-item';
-				var infoDiv = document.createElement('div');
+				const infoDiv = document.createElement('div');
 				infoDiv.className = 'forums-moderation__flag-info';
-				var titleLink = document.createElement('span');
+				const titleLink = document.createElement('span');
 				titleLink.className = 'forums-moderation__message-title font-weight-bold';
-				titleLink.textContent = (forumsMod.dataset.labelUserId || 'User ID: {0}').replace('{0}', ban.banUserId);
-				var metaDiv = document.createElement('div');
+				titleLink.textContent = (forumsMod.dataset.labelUserId || 'User ID: {0}').replace('{0}', banUserId);
+				const metaDiv = document.createElement('div');
 				metaDiv.className = 'forums-moderation__flag-meta text-secondary small mt-1';
-				var dateSpan = document.createElement('span');
-				dateSpan.textContent = (forumsMod.dataset.labelBannedOn || 'Banned on: {0}').replace('{0}', formatDate(ban.dateCreated));
+				const dateSpan = document.createElement('span');
+				dateSpan.textContent = (forumsMod.dataset.labelBannedOn || 'Banned on: {0}').replace('{0}', formatDate(dateCreated));
 				metaDiv.appendChild(dateSpan);
 				infoDiv.appendChild(titleLink);
 				infoDiv.appendChild(metaDiv);
-				var actionsDiv = document.createElement('div');
+				const actionsDiv = document.createElement('div');
 				actionsDiv.className = 'forums-moderation__flag-actions';
-				if (ban.actions && ban.actions['delete']) {
-					var revokeBtn = document.createElement('button');
+				if (actions && actions['delete']) {
+					const revokeBtn = document.createElement('button');
 					revokeBtn.className = 'btn btn-sm btn-outline-success';
 					revokeBtn.textContent = forumsMod.dataset.labelRevokeBan || 'Revoke Ban';
 					revokeBtn.addEventListener('click', function() {
-						var message = forumsMod.dataset.labelConfirmRevokeBan || 'Are you sure you want to revoke this ban?';
+						const message = forumsMod.dataset.labelConfirmRevokeBan || 'Are you sure you want to revoke this ban?';
 						showConfirmModal(message, forumsMod.dataset.labelRevokeBan || 'Revoke Ban', function() {
 							revokeBtn.disabled = true;
-							Liferay.Util.fetch(ban.actions['delete'].href, { headers: headers, method: 'DELETE' }).then(function(r) {
+							Liferay.Util.fetch(actions['delete'].href, { headers, method: 'DELETE' }).then(function(r) {
 								if (r.ok) { item.style.opacity = '0.5'; setTimeout(function() { item.remove(); showToast(forumsMod.dataset.labelBanRevokedSuccessfully || 'Ban revoked successfully.'); if (flagList.children.length === 0) loadBans(); }, 300); }
 							}).catch(function(e) { revokeBtn.disabled = false; console.error(e); });
 						});
@@ -248,7 +252,7 @@ if (forumsMod) {
 				item.appendChild(infoDiv);
 				item.appendChild(actionsDiv);
 				flagList.appendChild(item);
-				Liferay.Util.fetch(portalURL + '/o/headless-admin-user/v1.0/user-accounts/' + ban.banUserId, { headers: headers, method: 'GET' }).then(function(r) { return r.json(); }).then(function(u) { var n = displayName(u) || u.name; if (n) { titleLink.textContent = n + ' (ID: ' + ban.banUserId + ')'; } }).catch(function() { });
+				Liferay.Util.fetch(portalURL + '/o/headless-admin-user/v1.0/user-accounts/' + banUserId, { headers, method: 'GET' }).then(function(r) { return r.json(); }).then(function(u) { const n = displayName(u) || u.name; if (n) { titleLink.textContent = n + ' (ID: ' + banUserId + ')'; } }).catch(function() { });
 			});
 			renderPagination(lastPage, loadBans);
 		}).catch(function(err) { if (loadingEl) loadingEl.style.display = 'none'; console.error('Bans load error:', err); });
@@ -268,7 +272,7 @@ if (forumsMod) {
 		flagList.innerHTML = '';
 		if (paginationNav) paginationNav.style.display = 'none';
 
-		var url = portalURL + '/o/c/forumsuspiciousactivities/scopes/' + scopeGroupId
+		const url = portalURL + '/o/c/forumsuspiciousactivities/scopes/' + scopeGroupId
 			+ '?nestedFields=threadSuspiciousActivities'
 			+ '&sort=dateCreated:desc'
 			+ '&page=' + currentPage
@@ -276,7 +280,7 @@ if (forumsMod) {
 			+ buildFilterParam();
 
 		Liferay.Util.fetch(url, {
-			headers: headers,
+			headers,
 			method: 'GET'
 		})
 		.then(function(r) { return r.json(); })
@@ -284,8 +288,9 @@ if (forumsMod) {
 			if (loadingEl) loadingEl.style.display = 'none';
 
 			/* HATEOAS: check collection-level actions for write permission */
-			var hasPermission = !!(data.actions && (
-				data.actions['create'] || data.actions['post'] || data.actions['POST']
+			const {actions} = data;
+			const hasPermission = !!(actions && (
+				actions['create'] || actions['post'] || actions['POST']
 			));
 
 			if (hasPermission) {
@@ -299,63 +304,70 @@ if (forumsMod) {
 				return;
 			}
 
-			var items = data.items || [];
-			var totalCount = data.totalCount || 0;
-			var lastPage = data.lastPage || 1;
+			const items = data.items || [];
+			const totalCount = data.totalCount || 0;
+			const lastPage = data.lastPage || 1;
 
 			if (items.length === 0) {
 				flagList.innerHTML = '<div class="list-group-item text-secondary">' + (forumsMod.dataset.labelNoFlags || 'No flagged messages found.') + '</div>';
 				return;
 			}
 
-			var missingDisplayPage = false;
+			let missingDisplayPage = false;
 			items.forEach(function(flag) {
-				var messageData = flag.threadSuspiciousActivities || {};
-				var messageTitle = messageData.messageTitle || messageData.title || 'Message #' + (flag.suspiciousMessageId || flag.r_threadSuspiciousActivities_c_forumThreadId || '?');
-				var messageId = flag.suspiciousMessageId || flag.r_threadSuspiciousActivities_c_forumThreadId;
-				var authorId = messageData.creator ? messageData.creator.id : null;
-				var creator = flag.creator || {};
-				var creatorName = displayName(creator) || 'Unknown';
-				var reason = flag.reason || 'other';
-				var isValidated = flag.validated === true;
-				var date = formatDate(flag.dateCreated);
+				const {
+					actions: flagActions, creator: flagCreator, dateCreated, id: flagId,
+					reason: flagReason, suspiciousMessageId, threadSuspiciousActivities,
+					validated, r_threadSuspiciousActivities_c_forumThreadId
+				} = flag;
 
-				var item = document.createElement('div');
+				const messageData = threadSuspiciousActivities || {};
+				const {creator: messageCreator, messageTitle: dataTitle, title: dataAltTitle} = messageData;
+				const messageTitle = dataTitle || dataAltTitle || 'Message #' + (suspiciousMessageId || r_threadSuspiciousActivities_c_forumThreadId || '?');
+				const messageId = suspiciousMessageId || r_threadSuspiciousActivities_c_forumThreadId;
+				const authorId = messageCreator ? messageCreator.id : null;
+				const creator = flagCreator || {};
+				const creatorName = displayName(creator) || 'Unknown';
+				const reason = flagReason || 'other';
+				const isValidated = validated === true;
+				const date = formatDate(dateCreated);
+
+				const item = document.createElement('div');
 				item.className = 'list-group-item forums-moderation__flag-item';
 
 				/* Info column */
-				var infoDiv = document.createElement('div');
+				const infoDiv = document.createElement('div');
 				infoDiv.className = 'forums-moderation__flag-info';
 
-				var titleHref = buildMessageHref(messageData);
+				const titleHref = buildMessageHref(messageData);
 				if (!titleHref) missingDisplayPage = true;
 
-				var titleLink = document.createElement('a');
+				const titleLink = document.createElement('a');
 				titleLink.className = 'forums-moderation__message-title';
 				titleLink.textContent = messageTitle;
 				if (titleHref) titleLink.href = titleHref;
 				titleLink.target = '_blank';
 				titleLink.title = forumsMod.dataset.labelViewMessage || 'View Message';
 
-				var metaDiv = document.createElement('div');
+				const metaDiv = document.createElement('div');
 				metaDiv.className = 'forums-moderation__flag-meta text-secondary small';
 
 				/* Reporter */
-				var reportedByTmpl = forumsMod.dataset.labelReportedBy || 'Reported by {0}';
-				var reporterSpan = document.createElement('span');
+				const reportedByTmpl = forumsMod.dataset.labelReportedBy || 'Reported by {0}';
+				const reporterSpan = document.createElement('span');
 				reporterSpan.textContent = reportedByTmpl.replace('{0}', creatorName);
 
 				/* Date */
-				var dateSpan = document.createElement('span');
+				const dateSpan = document.createElement('span');
 				dateSpan.textContent = date;
 
 				/* Reason badge */
-				var reasonBadge = document.createElement('span');
+				const reasonBadge = document.createElement('span');
 				reasonBadge.className = getReasonBadgeClass(reason);
 				reasonBadge.textContent = getReasonLabel(reason);
 
 				/* Status badge */
-				var statusBadge = document.createElement('span');
+				const statusBadge = document.createElement('span');
 				statusBadge.className = 'label ' + (isValidated ? 'label-success' : 'label-warning');
 				statusBadge.textContent = isValidated
 					? (forumsMod.dataset.labelValidated || 'Validated')
@@ -370,11 +382,11 @@ if (forumsMod) {
 				infoDiv.appendChild(metaDiv);
 
 				/* Actions column */
-				var actionsDiv = document.createElement('div');
+				const actionsDiv = document.createElement('div');
 				actionsDiv.className = 'forums-moderation__flag-actions';
 
 				/* View link — always shown (read-only) */
-				var viewLink = document.createElement('a');
+				const viewLink = document.createElement('a');
 				viewLink.className = 'btn btn-sm btn-outline-primary' + (titleHref ? '' : ' disabled');
 				viewLink.textContent = forumsMod.dataset.labelViewMessage || 'View Message';
 				if (titleHref) viewLink.href = titleHref;
@@ -382,23 +394,24 @@ if (forumsMod) {
 				actionsDiv.appendChild(viewLink);
 
 				/* HATEOAS: only render Validate button if the item has update/patch actions */
-				if (flag.actions && (flag.actions['update'] || flag.actions['patch'] || flag.actions['PUT'])) {
-					var patchHref = (flag.actions['patch'] && flag.actions['patch'].href)
-						|| (flag.actions['update'] && flag.actions['update'].href)
-						|| (flag.actions['PUT'] && flag.actions['PUT'].href)
-						|| (portalURL + '/o/c/forumsuspiciousactivities/' + flag.id);
+				if (flagActions && (flagActions['update'] || flagActions['patch'] || flagActions['PUT'])) {
+					const {patch, update, PUT} = flagActions;
+					const patchHref = (patch && patch.href)
+						|| (update && update.href)
+						|| (PUT && PUT.href)
+						|| (portalURL + '/o/c/forumsuspiciousactivities/' + flagId);
 
-					var validateBtn = document.createElement('button');
+					const validateBtn = document.createElement('button');
 					validateBtn.className = isValidated ? 'btn btn-sm btn-outline-secondary' : 'btn btn-sm btn-outline-success';
 					validateBtn.textContent = isValidated
 						? (forumsMod.dataset.labelPending || 'Pending')
 						: (forumsMod.dataset.labelValidate || 'Validate');
 					validateBtn.addEventListener('click', (function(flagId, flagHref, validated) {
 						return function() {
-							var btn = this;
+							const btn = this;
 							btn.disabled = true;
 							Liferay.Util.fetch(flagHref, {
-								headers: headers,
+								headers,
 								method: 'PATCH',
 								body: JSON.stringify({ validated: !validated })
 							})
@@ -416,21 +429,21 @@ if (forumsMod) {
 								console.error('Validate error:', err);
 							});
 						};
-					})(flag.id, patchHref, isValidated));
+					})(flagId, patchHref, isValidated));
 					actionsDiv.appendChild(validateBtn);
 				}
 
 				/* Ban Author button (if validated and has author) */
 				if (isValidated && authorId) {
-					var banBtn = document.createElement('button');
+					const banBtn = document.createElement('button');
 					banBtn.className = 'btn btn-sm btn-outline-danger';
 					banBtn.textContent = forumsMod.dataset.labelBanAuthor || 'Ban Author';
 					banBtn.addEventListener('click', function() {
-						var message = forumsMod.dataset.labelConfirmBanUser || 'Are you sure you want to ban this user?';
+						const message = forumsMod.dataset.labelConfirmBanUser || 'Are you sure you want to ban this user?';
 						showConfirmModal(message, forumsMod.dataset.labelBanAuthor || 'Ban Author', function() {
 							banBtn.disabled = true;
 							Liferay.Util.fetch(portalURL + '/o/c/forumbans/scopes/' + scopeGroupId, {
-								headers: headers,
+								headers,
 								method: 'POST',
 								body: JSON.stringify({ banUserId: parseInt(authorId) })
 							}).then(function(r) {
@@ -448,20 +461,20 @@ if (forumsMod) {
 				}
 
 				/* HATEOAS: only render Dismiss button if the item has delete action */
-				if (flag.actions && flag.actions['delete']) {
-					var deleteHref = flag.actions['delete'].href || (portalURL + '/o/c/forumsuspiciousactivities/' + flag.id);
+				if (flagActions && flagActions['delete']) {
+					const deleteHref = flagActions['delete'].href || (portalURL + '/o/c/forumsuspiciousactivities/' + flagId);
 
-					var dismissBtn = document.createElement('button');
+					const dismissBtn = document.createElement('button');
 					dismissBtn.className = 'btn btn-sm btn-outline-danger';
 					dismissBtn.textContent = forumsMod.dataset.labelDismiss || 'Dismiss';
 					dismissBtn.addEventListener('click', (function(flagItem, flagDeleteHref) {
 						return function() {
-							var message = forumsMod.dataset.labelConfirmDismiss || 'Are you sure you want to dismiss this flag?';
+							const message = forumsMod.dataset.labelConfirmDismiss || 'Are you sure you want to dismiss this flag?';
 							showConfirmModal(message, forumsMod.dataset.labelDismiss || 'Dismiss', function() {
-								var btn = dismissBtn;
+								const btn = dismissBtn;
 								btn.disabled = true;
 								Liferay.Util.fetch(flagDeleteHref, {
-									headers: headers,
+									headers,
 									method: 'DELETE'
 								})
 								.then(function(r) {

@@ -1,71 +1,72 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-var messageComposer = fragmentElement.querySelector('#forumsMessageComposer');
+const messageComposer = fragmentElement.querySelector('#forumsMessageComposer');
 
 if (messageComposer) {
-	var portalURL = Liferay.ThemeDisplay.getPortalURL();
-	var scopeGroupId = Liferay.ThemeDisplay.getScopeGroupId();
-	var currentUserId = Liferay.ThemeDisplay.getUserId();
-	var headers = {
+	const portalURL = Liferay.ThemeDisplay.getPortalURL();
+	const scopeGroupId = Liferay.ThemeDisplay.getScopeGroupId();
+	const currentUserId = Liferay.ThemeDisplay.getUserId();
+	const headers = {
 		'Accept': 'application/json',
 		'Content-Type': 'application/json'
 	};
 
 	/* DOM refs */
-	var modal = messageComposer.querySelector('#forumsMessageComposerModal');
-	var backdrop = messageComposer.querySelector('#forumsMessageComposerBackdrop');
-	var closeBtn = messageComposer.querySelector('#forumsMessageComposerCloseBtn');
-	var form = messageComposer.querySelector('#forumsMessageComposerForm');
-	var titleEl = messageComposer.querySelector('#forumsMessageComposerTitle');
-	var categorySelect = messageComposer.querySelector('#forumsMessageComposerCategory');
-	var categoryGroup = messageComposer.querySelector('#forumsMessageComposerCategoryGroup');
-	var subjectInput = messageComposer.querySelector('#forumsMessageComposerSubject');
-	var subjectGroup = messageComposer.querySelector('#forumsMessageComposerSubjectGroup');
-	var questionCheck = messageComposer.querySelector('#forumsMessageComposerQuestion');
-	var questionGroup = messageComposer.querySelector('#forumsMessageComposerQuestionGroup');
-	var prioritySelect = messageComposer.querySelector('#forumsMessageComposerPriority');
-	var priorityGroup = messageComposer.querySelector('#forumsMessageComposerPriorityGroup');
-	var subscribeCheck = messageComposer.querySelector('#forumsMessageComposerSubscribe');
-	var subscribeGroup = messageComposer.querySelector('#forumsMessageComposerSubscribeGroup');
-	var tagsGroup = messageComposer.querySelector('#forumsMessageComposerTagsGroup');
-	var leftCol = messageComposer.querySelector('#forumsMessageComposerLeftCol');
-	var tagsInput = messageComposer.querySelector('#forumsMessageComposerTagsInput');
-	var tagsList = messageComposer.querySelector('#forumsMessageComposerTagsList');
-	var bodyLabel = messageComposer.querySelector('#forumsMessageComposerBodyLabel');
-	var bodyError = messageComposer.querySelector('#forumsMessageComposerBodyError');
-	var submitBtn = messageComposer.querySelector('#forumsMessageComposerSubmit');
-	var cancelBtn = messageComposer.querySelector('#forumsMessageComposerCancel');
-	var successAlert = messageComposer.querySelector('#forumsMessageComposerSuccess');
-	var errorAlert = messageComposer.querySelector('#forumsMessageComposerError');
-	var attachBtn = messageComposer.querySelector('#forumsMessageComposerAttachBtn');
-	var fileInput = messageComposer.querySelector('#forumsMessageComposerFileInput');
-	var pendingFilesEl = messageComposer.querySelector('#forumsMessageComposerPendingFiles');
-	var existingFilesEl = messageComposer.querySelector('#forumsMessageComposerExistingFiles');
+	const modal = messageComposer.querySelector('#forumsMessageComposerModal');
+	const backdrop = messageComposer.querySelector('#forumsMessageComposerBackdrop');
+	const closeBtn = messageComposer.querySelector('#forumsMessageComposerCloseBtn');
+	const form = messageComposer.querySelector('#forumsMessageComposerForm');
+	const titleEl = messageComposer.querySelector('#forumsMessageComposerTitle');
+	const categorySelect = messageComposer.querySelector('#forumsMessageComposerCategory');
+	const categoryGroup = messageComposer.querySelector('#forumsMessageComposerCategoryGroup');
+	const subjectInput = messageComposer.querySelector('#forumsMessageComposerSubject');
+	const subjectGroup = messageComposer.querySelector('#forumsMessageComposerSubjectGroup');
+	const questionCheck = messageComposer.querySelector('#forumsMessageComposerQuestion');
+	const questionGroup = messageComposer.querySelector('#forumsMessageComposerQuestionGroup');
+	const prioritySelect = messageComposer.querySelector('#forumsMessageComposerPriority');
+	const priorityGroup = messageComposer.querySelector('#forumsMessageComposerPriorityGroup');
+	const subscribeCheck = messageComposer.querySelector('#forumsMessageComposerSubscribe');
+	const subscribeGroup = messageComposer.querySelector('#forumsMessageComposerSubscribeGroup');
+	const tagsGroup = messageComposer.querySelector('#forumsMessageComposerTagsGroup');
+	const leftCol = messageComposer.querySelector('#forumsMessageComposerLeftCol');
+	const tagsInput = messageComposer.querySelector('#forumsMessageComposerTagsInput');
+	const tagsList = messageComposer.querySelector('#forumsMessageComposerTagsList');
+	const bodyLabel = messageComposer.querySelector('#forumsMessageComposerBodyLabel');
+	const bodyError = messageComposer.querySelector('#forumsMessageComposerBodyError');
+	const submitBtn = messageComposer.querySelector('#forumsMessageComposerSubmit');
+	const cancelBtn = messageComposer.querySelector('#forumsMessageComposerCancel');
+	const successAlert = messageComposer.querySelector('#forumsMessageComposerSuccess');
+	const errorAlert = messageComposer.querySelector('#forumsMessageComposerError');
+	const attachBtn = messageComposer.querySelector('#forumsMessageComposerAttachBtn');
+	const fileInput = messageComposer.querySelector('#forumsMessageComposerFileInput');
+	const pendingFilesEl = messageComposer.querySelector('#forumsMessageComposerPendingFiles');
+	const existingFilesEl = messageComposer.querySelector('#forumsMessageComposerExistingFiles');
 
 	/* Files staged for the next post. Uploaded as ForumMessageAttachment rows once
 	   the message is created/edited (see uploadAttachments). Matches the object
 	   field's maximumFileSize (10 MB) so we can reject oversized files up front. */
-	var stagedFiles = [];
-	var MAX_FILE_SIZE = 10 * 1024 * 1024;
+	let stagedFiles = [];
+	const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 	/* Edit mode only: the message's already-uploaded attachments, and the ids the
 	   user has marked for removal. Removals are staged (like new files) and applied
 	   on Save, so Cancel reverts. Only attachments the current user uploaded show a
 	   remove control (deletion is also enforced server-side by object ownership). */
-	var existingAttachments = [];
-	var removedAttachmentIds = [];
+	let existingAttachments = [];
+	let removedAttachmentIds = [];
 
 	/* CKEditor instance tracking */
-	var editorName = fragmentElementId + '-forumsMessageComposerBody';
-	var bodyEditorInstance = null;
+	const editorName = fragmentElementId + '-forumsMessageComposerBody';
+	let bodyEditorInstance = null;
 
-	var editorPromise = new Promise(function(resolve) {
+	const editorPromise = new Promise(function(resolve) {
 		function matchesName(editor) {
 			if (!editor) {
 				return false;
 			}
-			var name = editor.name ||
-				(editor.config && (typeof editor.config.get === 'function') &&
-					editor.config.get('name'));
+			const {config, name: instanceName} = editor;
+			const name = instanceName ||
+				(config && (typeof config.get === 'function') &&
+					config.get('name'));
 			return name === editorName;
 		}
 
@@ -77,9 +78,9 @@ if (messageComposer) {
 		   To stay correct either way we listen for BOTH the CKEditor 5
 		   "ckeditor:ready" event and the legacy CKEditor "instanceReady"
 		   event, and also resolve an instance that is already ready. */
-		Liferay.on('ckeditor:ready', function(event) {
-			if (matchesName(event && event.editor)) {
-				resolve(event.editor);
+		Liferay.on('ckeditor:ready', function({editor}) {
+			if (matchesName(editor)) {
+				resolve(editor);
 			}
 		});
 
@@ -88,9 +89,9 @@ if (messageComposer) {
 				resolve(CKEDITOR.instances[editorName]);
 			}
 
-			CKEDITOR.on('instanceReady', function(event) {
-				if (matchesName(event && event.editor)) {
-					resolve(event.editor);
+			CKEDITOR.on('instanceReady', function({editor}) {
+				if (matchesName(editor)) {
+					resolve(editor);
 				}
 			});
 		}
@@ -122,7 +123,7 @@ if (messageComposer) {
 
 			return CKEDITOR.instances[editorName].getData() || '';
 		}
-		var textarea = document.getElementById(editorName);
+		const textarea = document.getElementById(editorName);
 		if (textarea && (typeof textarea.value === 'string')) {
 			return textarea.value;
 		}
@@ -135,9 +136,9 @@ if (messageComposer) {
 		if (!pendingFilesEl) return;
 		pendingFilesEl.innerHTML = '';
 		stagedFiles.forEach(function(file, index) {
-			var chip = document.createElement('span');
+			const chip = document.createElement('span');
 			chip.className = 'label label-secondary label-dismissible forums-message-composer__pending-file';
-			var removeLabel = (messageComposer.dataset.labelRemove || 'Remove');
+			const removeLabel = (messageComposer.dataset.labelRemove || 'Remove');
 			chip.innerHTML = '<span class="label-item label-item-expand">' +
 				Liferay.Util.escapeHTML(file.name) + '</span>' +
 				'<span class="label-item label-item-after"><button class="close" type="button" data-file-index="' +
@@ -152,20 +153,21 @@ if (messageComposer) {
 	function renderExistingAttachments() {
 		if (!existingFilesEl) return;
 		existingFilesEl.innerHTML = '';
-		var removeLabelTmpl = messageComposer.dataset.labelRemoveAttachment || 'Remove {0}';
+		const removeLabelTmpl = messageComposer.dataset.labelRemoveAttachment || 'Remove {0}';
 		existingAttachments.forEach(function(att) {
-			if (removedAttachmentIds.indexOf(att.id) !== -1) return;
-			var file = att.file || {};
-			var name = file.name || (file.link && file.link.label) || att.id;
-			var canRemove = att.creator &&
-				String(att.creator.id) === String(currentUserId);
-			var chip = document.createElement('span');
+			const {creator, file: attFile, id} = att;
+			if (removedAttachmentIds.indexOf(id) !== -1) return;
+			const {link, name: fileName} = attFile || {};
+			const name = fileName || (link && link.label) || id;
+			const canRemove = creator &&
+				String(creator.id) === String(currentUserId);
+			const chip = document.createElement('span');
 			chip.className = 'label label-secondary forums-message-composer__existing-file';
-			var inner = '<span class="label-item label-item-expand">' + Liferay.Util.escapeHTML(String(name)) + '</span>';
+			let inner = '<span class="label-item label-item-expand">' + Liferay.Util.escapeHTML(String(name)) + '</span>';
 			if (canRemove) {
-				var removeLabel = Liferay.Util.escapeHTML(removeLabelTmpl.replace('{0}', name));
+				const removeLabel = Liferay.Util.escapeHTML(removeLabelTmpl.replace('{0}', name));
 				inner += '<span class="label-item label-item-after"><button class="close" type="button" data-attachment-id="' +
-					att.id + '" aria-label="' + removeLabel + '" title="' + removeLabel + '">×</button></span>';
+					id + '" aria-label="' + removeLabel + '" title="' + removeLabel + '">×</button></span>';
 			}
 			chip.innerHTML = inner;
 			existingFilesEl.appendChild(chip);
@@ -178,9 +180,9 @@ if (messageComposer) {
 		if (!existingFilesEl || !messageId) return;
 		/* The relationship FK is filtered as a quoted value (an unquoted numeric
 		   yields a 400 "Incompatible types."), matching the message-detail fragment. */
-		var filter = encodeURIComponent("r_messageAttachments_c_forumMessageId eq '" + messageId + "'");
+		const filter = encodeURIComponent("r_messageAttachments_c_forumMessageId eq '" + messageId + "'");
 		Liferay.Util.fetch(portalURL + '/o/c/forummessageattachments/scopes/' + scopeGroupId + '?nestedFields=file&pageSize=100&filter=' + filter, {
-			headers: headers,
+			headers,
 			method: 'GET'
 		})
 		.then(function(r) { return r.json(); })
@@ -193,9 +195,9 @@ if (messageComposer) {
 
 	if (existingFilesEl) {
 		existingFilesEl.addEventListener('click', function(e) {
-			var btn = e.target.closest('.close');
+			const btn = e.target.closest('.close');
 			if (btn) {
-				var id = parseInt(btn.getAttribute('data-attachment-id'), 10);
+				const id = parseInt(btn.getAttribute('data-attachment-id'), 10);
 				if (removedAttachmentIds.indexOf(id) === -1) removedAttachmentIds.push(id);
 				renderExistingAttachments();
 			}
@@ -207,7 +209,7 @@ if (messageComposer) {
 		if (!removedAttachmentIds.length) return Promise.resolve();
 		return Promise.all(removedAttachmentIds.map(function(id) {
 			return Liferay.Util.fetch(portalURL + '/o/c/forummessageattachments/' + id, {
-				headers: headers,
+				headers,
 				method: 'DELETE'
 			}).catch(function(err) {
 				console.warn('ForumsMessageComposer: attachment delete failed', err);
@@ -240,9 +242,9 @@ if (messageComposer) {
 
 	if (pendingFilesEl) {
 		pendingFilesEl.addEventListener('click', function(e) {
-			var btn = e.target.closest('.close');
+			const btn = e.target.closest('.close');
 			if (btn) {
-				var index = parseInt(btn.getAttribute('data-file-index'), 10);
+				const index = parseInt(btn.getAttribute('data-file-index'), 10);
 				stagedFiles.splice(index, 1);
 				renderPendingFiles();
 			}
@@ -252,10 +254,10 @@ if (messageComposer) {
 	/* Read a File as base64 (no data: prefix) for the object Attachment field payload. */
 	function fileToBase64(file) {
 		return new Promise(function(resolve, reject) {
-			var reader = new FileReader();
+			const reader = new FileReader();
 			reader.onload = function() {
-				var result = String(reader.result || '');
-				var comma = result.indexOf(',');
+				const result = String(reader.result || '');
+				const comma = result.indexOf(',');
 				resolve(comma >= 0 ? result.slice(comma + 1) : result);
 			};
 			reader.onerror = function() { reject(reader.error || new Error('read failed')); };
@@ -270,13 +272,14 @@ if (messageComposer) {
 	function uploadAttachments(messageId) {
 		if (!messageId || !stagedFiles.length) return Promise.resolve();
 		return Promise.all(stagedFiles.map(function(file) {
+			const {name} = file;
 			return fileToBase64(file).then(function(base64) {
-				var body = {
-					file: { name: file.name, fileBase64: base64 },
+				const body = {
+					file: { name, fileBase64: base64 },
 					r_messageAttachments_c_forumMessageId: parseInt(messageId)
 				};
 				return Liferay.Util.fetch(portalURL + '/o/c/forummessageattachments/scopes/' + scopeGroupId + '?nestedFields=file', {
-					headers: headers,
+					headers,
 					method: 'POST',
 					body: JSON.stringify(body)
 				});
@@ -287,29 +290,28 @@ if (messageComposer) {
 	}
 
 	/* Detect mode from URL */
-	var urlParams = new URLSearchParams(window.location.search);
-	var messageId = urlParams.get('messageId');
-	var categoryIdParam = urlParams.get('categoryId');
-	var isReplyMode = !!messageId;
-	var parentMessageId = null;
-	var categoriesLoaded = false;
-	var isEditMode = false;
-	var editMessageId = null;
-	var editIsOp = false;
-	var tagsArray = [];
+	const urlParams = new URLSearchParams(window.location.search);
+	let messageId = urlParams.get('messageId');
+	let categoryIdParam = urlParams.get('categoryId');
+	let isReplyMode = !!messageId;
+	let parentMessageId = null;
+	let categoriesLoaded = false;
+	let isEditMode = false;
+	let editMessageId = null;
+	let editIsOp = false;
+	let tagsArray = [];
 	
-	var isBanned = false;
-	var currentUserId = Liferay.ThemeDisplay.getUserId();
+	let isBanned = false;
 
 	/* Thread priority (Message Boards parity). Whether the priority select is
 	   offered is gated the same way the moderation page detects moderators: the
 	   HATEOAS create action on the ForumBan collection, which regular users are
 	   never granted. Like ban enforcement, this is UI-only — see the README. */
-	var canSetPriority = false;
+	let canSetPriority = false;
 	/* True while the form is in a mode where priority applies (new topic or
 	   edit topic, never replies). Combined with canSetPriority, which may
 	   resolve after the modal is already open. */
-	var priorityApplicable = false;
+	let priorityApplicable = false;
 
 	function syncPriorityGroup() {
 		if (priorityGroup) {
@@ -319,12 +321,13 @@ if (messageComposer) {
 
 	if (Liferay.ThemeDisplay.isSignedIn()) {
 		Liferay.Util.fetch(portalURL + '/o/c/forumbans/scopes/' + scopeGroupId + '?filter=' + encodeURIComponent('banUserId eq ' + currentUserId) + '&pageSize=1', {
-			headers: headers,
+			headers,
 			method: 'GET'
 		})
 		.then(function(r) { return r.json(); })
 		.then(function(data) {
-			if (data.items && data.items.length > 0) {
+			const {actions, items} = data;
+			if (items && items.length > 0) {
 				isBanned = true;
 				if (submitBtn) submitBtn.disabled = true;
 				if (errorAlert) {
@@ -332,7 +335,7 @@ if (messageComposer) {
 					errorAlert.style.display = '';
 				}
 			}
-			canSetPriority = !isBanned && !!(data.actions && (data.actions['create'] || data.actions['post'] || data.actions['POST']));
+			canSetPriority = !isBanned && !!(actions && (actions['create'] || actions['post'] || actions['POST']));
 			syncPriorityGroup();
 		})
 		.catch(function(err) { console.error('Error checking ban status', err); });
@@ -344,7 +347,7 @@ if (messageComposer) {
 		if (!tagsList) return;
 		tagsList.innerHTML = '';
 		tagsArray.forEach(function(tag, index) {
-			var span = document.createElement('span');
+			const span = document.createElement('span');
 			span.className = 'label label-secondary label-dismissible';
 			span.innerHTML = '<span class="label-item label-item-expand">' + tag + '</span>' +
 				'<span class="label-item label-item-after"><button class="close" type="button" data-tag-index="' + index + '" aria-label="Close">×</button></span>';
@@ -356,7 +359,7 @@ if (messageComposer) {
 		tagsInput.addEventListener('keydown', function(e) {
 			if (e.key === ',' || e.key === 'Enter') {
 				e.preventDefault();
-				var val = tagsInput.value.trim().replace(/,/g, '');
+				const val = tagsInput.value.trim().replace(/,/g, '');
 				if (val && tagsArray.indexOf(val) === -1) {
 					tagsArray.push(val);
 					tagsInput.value = '';
@@ -373,9 +376,9 @@ if (messageComposer) {
 
 	if (tagsList) {
 		tagsList.addEventListener('click', function(e) {
-			var btn = e.target.closest('.close');
+			const btn = e.target.closest('.close');
 			if (btn) {
-				var index = parseInt(btn.getAttribute('data-tag-index'), 10);
+				const index = parseInt(btn.getAttribute('data-tag-index'), 10);
 				tagsArray.splice(index, 1);
 				renderTags();
 			}
@@ -384,7 +387,7 @@ if (messageComposer) {
 
 	/* ---- Modal show / hide (vanilla JS) ---- */
 
-	var _modalTrigger = null;
+	let _modalTrigger = null;
 
 	function showModal() {
 		_modalTrigger = document.activeElement;
@@ -454,7 +457,7 @@ if (messageComposer) {
 
 	/* "page" mode renders the form on its own screen (no modal); "modal" mode
 	   keeps the Clay dialog used for replies and edits. */
-	var formMode = messageComposer.dataset.formMode || 'modal';
+	const formMode = messageComposer.dataset.formMode || 'modal';
 
 	/* Close via X button, Cancel button, or backdrop click. In page mode the
 	   Cancel button just navigates back instead of closing a dialog. */
@@ -537,30 +540,30 @@ if (messageComposer) {
 		categoriesLoaded = true;
 
 		Liferay.Util.fetch(portalURL + '/o/c/forumcategories/scopes/' + scopeGroupId + '?pageSize=50&sort=categoryName:asc', {
-			headers: headers,
+			headers,
 			method: 'GET'
 		})
 		.then(function(r) { return r.json(); })
 		.then(function(data) {
-			var items = data.items || [];
+			const items = data.items || [];
 
 			/* Group subcategories under their parent so the structure is
 			   visible. Posting into a parent stays valid — a parent lists only
 			   its own topics, so it must remain a usable target. */
-			var PARENT_FK = 'r_categorySubcategories_c_forumCategoryId';
+			const PARENT_FK = 'r_categorySubcategories_c_forumCategoryId';
 
-			var byId = {};
+			const byId = {};
 			items.forEach(function(cat) { byId[cat.id] = cat; });
 
-			var childrenOf = {};
+			const childrenOf = {};
 			items.forEach(function(cat) {
-				var pid = Number(cat[PARENT_FK]) || 0;
+				let pid = Number(cat[PARENT_FK]) || 0;
 				if (pid && !byId[pid]) pid = 0;
 				(childrenOf[pid] = childrenOf[pid] || []).push(cat);
 			});
 
 			function addOption(cat, depth) {
-				var opt = document.createElement('option');
+				const opt = document.createElement('option');
 				opt.value = cat.id;
 				opt.textContent = (depth > 0 ? '— ' : '')
 					+ (cat.categoryName || messageComposer.dataset.labelUnnamed || 'Unnamed');
@@ -584,54 +587,56 @@ if (messageComposer) {
 
 	/* ---- Public API for other fragments ---- */
 
-	window.forumsOpenComposeModal = function(options) {
-		options = options || {};
-		var replyMode = !!options.messageId && !options.editMode;
-		isEditMode = !!options.editMode;
-		editIsOp = !!options.isOp;
-		editMessageId = options.messageId || null;
+	window.forumsOpenComposeModal = function({
+		body, categoryId, editMode, isOp, isQuestion, priority, subject, tags, threadId,
+		messageId: optionMessageId, parentMessageId: optionParentMessageId
+	} = {}) {
+		const replyMode = !!optionMessageId && !editMode;
+		isEditMode = !!editMode;
+		editIsOp = !!isOp;
+		editMessageId = optionMessageId || null;
 
-		if (options.threadId) messageId = options.threadId;
-		else if (options.messageId) messageId = options.messageId;
-		if (options.categoryId) categoryIdParam = String(options.categoryId);
-		parentMessageId = options.parentMessageId || null;
+		if (threadId) messageId = threadId;
+		else if (optionMessageId) messageId = optionMessageId;
+		if (categoryId) categoryIdParam = String(categoryId);
+		parentMessageId = optionParentMessageId || null;
 		isReplyMode = replyMode;
 		configureModal(replyMode);
 
 		if (isEditMode) {
 			loadExistingAttachments(editMessageId);
-			if (subjectInput && options.subject) subjectInput.value = options.subject;
-			if (questionCheck && typeof options.isQuestion !== 'undefined') questionCheck.checked = options.isQuestion;
+			if (subjectInput && subject) subjectInput.value = subject;
+			if (questionCheck && isQuestion !== undefined) questionCheck.checked = isQuestion;
 			if (prioritySelect) {
 				/* Priority arrives as a decimal (e.g. 2.0); the select only knows
 				   the discrete MB levels 0-3, anything else falls back to None. */
-				var priorityValue = String(Math.round(parseFloat(options.priority)) || 0);
+				const priorityValue = String(Math.round(parseFloat(priority)) || 0);
 				prioritySelect.value = priorityValue;
 				if (prioritySelect.value !== priorityValue) prioritySelect.value = '0';
 			}
-			if (options.tags && Array.isArray(options.tags)) {
-				tagsArray = [].concat(options.tags);
+			if (tags && Array.isArray(tags)) {
+				tagsArray = [].concat(tags);
 				renderTags();
 			}
-			if (options.body && bodyEditorInstance) {
-				bodyEditorInstance.setData(options.body);
-			} else if (options.body) {
+			if (body && bodyEditorInstance) {
+				bodyEditorInstance.setData(body);
+			} else if (body) {
 				/* Wait for editor to be ready if it's not yet */
 				editorPromise.then(function(editor) {
-					editor.setData(options.body);
+					editor.setData(body);
 				});
 			}
-			if (options.categoryId && categorySelect) {
+			if (categoryId && categorySelect) {
 				/* Ensure categories are loaded before setting value */
 				if (!categoriesLoaded) {
 					loadCategories();
-					setTimeout(function() { categorySelect.value = String(options.categoryId); }, 500);
+					setTimeout(function() { categorySelect.value = String(categoryId); }, 500);
 				} else {
-					categorySelect.value = String(options.categoryId);
+					categorySelect.value = String(categoryId);
 				}
 			}
-		} else if (!replyMode && options.categoryId && categorySelect) {
-			categorySelect.value = String(options.categoryId);
+		} else if (!replyMode && categoryId && categorySelect) {
+			categorySelect.value = String(categoryId);
 		}
 
 		showModal();
@@ -639,17 +644,18 @@ if (messageComposer) {
 
 	/* Listen for any element with data-forums-compose attribute */
 	document.addEventListener('click', function(e) {
-		var trigger = e.target.closest('[data-forums-compose]');
+		const trigger = e.target.closest('[data-forums-compose]');
 		if (trigger) {
 			e.preventDefault();
-			var composeMessageId = trigger.getAttribute('data-forums-message-id') || messageId;
-			var composeCategoryId = trigger.getAttribute('data-forums-category-id') || categoryIdParam;
+			const {forumsCategoryId, forumsMessageId, forumsParentId, forumsTags} = trigger.dataset;
+			const composeMessageId = forumsMessageId || messageId;
+			const composeCategoryId = forumsCategoryId || categoryIdParam;
 			/* For a reply to another reply, the root ForumMessage id is the
 			   foreign key (data-forums-message-id) and the reply being answered
 			   is the threading parent (data-forums-parent-id). */
-			var composeParentId = trigger.getAttribute('data-forums-parent-id') || composeMessageId;
-			var rawTags = trigger.getAttribute('data-forums-tags');
-			var parsedTags = [];
+			const composeParentId = forumsParentId || composeMessageId;
+			const rawTags = forumsTags;
+			let parsedTags = [];
 			if (rawTags) {
 				try { parsedTags = JSON.parse(rawTags); } catch (e) {}
 			}
@@ -675,7 +681,7 @@ if (messageComposer) {
 	}
 
 	/* Check for pending success toast from a previous redirect */
-	var pendingToast = sessionStorage.getItem('forumsSuccessToast');
+	const pendingToast = sessionStorage.getItem('forumsSuccessToast');
 	if (pendingToast) {
 		sessionStorage.removeItem('forumsSuccessToast');
 		Liferay.on('allPortletsReady', function() {
@@ -706,12 +712,12 @@ if (messageComposer) {
 			if (successAlert) successAlert.style.display = 'none';
 			if (errorAlert) errorAlert.style.display = 'none';
 
-			var body = getEditorData();
+			const body = getEditorData();
 
 			/* Strip HTML to check if it's completely empty */
-			var tempDiv = document.createElement('div');
+			const tempDiv = document.createElement('div');
 			tempDiv.innerHTML = body;
-			var textContent = tempDiv.textContent || tempDiv.innerText || '';
+			const textContent = tempDiv.textContent || tempDiv.innerText || '';
 			
 			if (!textContent.trim()) {
 				if (bodyError) bodyError.style.display = 'block';
@@ -721,10 +727,10 @@ if (messageComposer) {
 			}
 
 			if (isEditMode) {
-				var selectedCategory = categorySelect ? categorySelect.value : '';
-				var subject = subjectInput ? subjectInput.value.trim() : '';
-				var isQuestion = questionCheck ? questionCheck.checked : false;
-				var valid = true;
+				const selectedCategory = categorySelect ? categorySelect.value : '';
+				const subject = subjectInput ? subjectInput.value.trim() : '';
+				const isQuestion = questionCheck ? questionCheck.checked : false;
+				let valid = true;
 
 				if (editIsOp) {
 					if (!selectedCategory) { categorySelect.classList.add('is-invalid'); valid = false; } else { categorySelect.classList.remove('is-invalid'); }
@@ -735,9 +741,9 @@ if (messageComposer) {
 				submitBtn.disabled = true;
 				submitBtn.textContent = messageComposer.dataset.labelPosting || 'Posting...';
 
-				var promises = [];
+				const promises = [];
 				if (editIsOp) {
-					var threadPatchPayload = {
+					const threadPatchPayload = {
 						messageTitle: subject,
 						messageTitle_i18n: { en_US: subject },
 						r_categoryThreads_c_forumCategoryId: parseInt(selectedCategory),
@@ -752,19 +758,19 @@ if (messageComposer) {
 					}
 					promises.push(
 						Liferay.Util.fetch(portalURL + '/o/c/forumthreads/' + messageId, {
-							headers: headers,
+							headers,
 							method: 'PATCH',
 							body: JSON.stringify(threadPatchPayload)
 						}).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
 					);
 					promises.push(
 						Liferay.Util.fetch(portalURL + '/o/c/forummessages/' + editMessageId, {
-							headers: headers,
+							headers,
 							method: 'PATCH',
 							body: JSON.stringify({
-								subject: subject,
+								subject,
 								subject_i18n: { en_US: subject },
-								body: body,
+								body,
 								r_categoryThreads_c_forumCategoryId: parseInt(selectedCategory)
 							})
 						}).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
@@ -772,10 +778,10 @@ if (messageComposer) {
 				} else {
 					promises.push(
 						Liferay.Util.fetch(portalURL + '/o/c/forummessages/' + editMessageId, {
-							headers: headers,
+							headers,
 							method: 'PATCH',
 							body: JSON.stringify({
-								body: body
+								body
 							})
 						}).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
 					);
@@ -800,17 +806,17 @@ if (messageComposer) {
 				submitBtn.disabled = true;
 				submitBtn.textContent = messageComposer.dataset.labelPosting || 'Posting...';
 
-				var replyPayload = {
+				const replyPayload = {
 					r_threadMessages_c_forumThreadId: parseInt(messageId),
 					parentMessageId: parentMessageId ? parseInt(parentMessageId) : 0,
-					body: body,
+					body,
 					format: 'html',
 					subject: 'Re: reply',
 					subject_i18n: { en_US: 'Re: reply' }
 				};
 
 				Liferay.Util.fetch(portalURL + '/o/c/forummessages/scopes/' + scopeGroupId, {
-					headers: headers,
+					headers,
 					method: 'POST',
 					body: JSON.stringify(replyPayload)
 				})
@@ -832,10 +838,10 @@ if (messageComposer) {
 				});
 
 			} else {
-				var selectedCategory = categorySelect ? categorySelect.value : '';
-				var subject = subjectInput ? subjectInput.value.trim() : '';
-				var isQuestion = questionCheck ? questionCheck.checked : false;
-				var valid = true;
+				const selectedCategory = categorySelect ? categorySelect.value : '';
+				const subject = subjectInput ? subjectInput.value.trim() : '';
+				const isQuestion = questionCheck ? questionCheck.checked : false;
+				let valid = true;
 
 				if (!selectedCategory) {
 					categorySelect.classList.add('is-invalid');
@@ -856,7 +862,7 @@ if (messageComposer) {
 				submitBtn.disabled = true;
 				submitBtn.textContent = messageComposer.dataset.labelPosting || 'Posting...';
 
-				var messagePayload = {
+				const messagePayload = {
 					messageTitle: subject,
 					messageTitle_i18n: { en_US: subject },
 					r_categoryThreads_c_forumCategoryId: parseInt(selectedCategory),
@@ -866,7 +872,7 @@ if (messageComposer) {
 				};
 
 				Liferay.Util.fetch(portalURL + '/o/c/forumthreads/scopes/' + scopeGroupId, {
-					headers: headers,
+					headers,
 					method: 'POST',
 					body: JSON.stringify(messagePayload)
 				})
@@ -875,18 +881,20 @@ if (messageComposer) {
 					return r.json();
 				})
 				.then(function(msg) {
-					var msgPayload = {
-						r_threadMessages_c_forumThreadId: msg.id,
+					const {friendlyUrlPath, id: threadId, scopeKey} = msg;
+
+					const msgPayload = {
+						r_threadMessages_c_forumThreadId: threadId,
 						r_categoryThreads_c_forumCategoryId: parseInt(selectedCategory),
-						subject: subject,
+						subject,
 						subject_i18n: { en_US: subject },
-						body: body,
+						body,
 						format: 'html'
 					};
 
-					var promises = [];
+					const promises = [];
 					promises.push(Liferay.Util.fetch(portalURL + '/o/c/forummessages/scopes/' + scopeGroupId, {
-						headers: headers,
+						headers,
 						method: 'POST',
 						body: JSON.stringify(msgPayload)
 					}).then(function(r) {
@@ -896,10 +904,10 @@ if (messageComposer) {
 
 					if (subscribeCheck && subscribeCheck.checked && parseInt(currentUserId) > 0) {
 						promises.push(Liferay.Util.fetch(portalURL + '/o/c/forumsubscriptions/scopes/' + scopeGroupId, {
-							headers: headers,
+							headers,
 							method: 'POST',
 							body: JSON.stringify({
-								r_threadSubscriptions_c_forumThreadId: msg.id,
+								r_threadSubscriptions_c_forumThreadId: threadId,
 								subscriberUserId: parseInt(currentUserId)
 							})
 						}).then(function(r) {
@@ -908,10 +916,10 @@ if (messageComposer) {
 					}
 
 					return Promise.all(promises).then(function(results) {
-						var rootMsg = results && results[0];
+						const [rootMsg] = results || [];
 						return uploadAttachments(rootMsg && rootMsg.id);
 					}).then(function() {
-						if (!msg.friendlyUrlPath) {
+						if (!friendlyUrlPath) {
 							if (Liferay.Util && Liferay.Util.openToast) {
 								Liferay.Util.openToast({
 									message: messageComposer.dataset.labelDisplayPageNotConfigured || 'Message created, but the display page is not configured.',
@@ -923,8 +931,8 @@ if (messageComposer) {
 						}
 						hideModal();
 						sessionStorage.setItem('forumsSuccessToast', messageComposer.dataset.labelQuestionPosted || 'Your question has been posted!');
-						var siteSlug = (msg.scopeKey || '').toLowerCase().replace(/ /g, '-');
-						spaNavigate(Liferay.ThemeDisplay.getPathFriendlyURLPublic() + '/' + siteSlug + '/c_forumthread/' + msg.friendlyUrlPath);
+						const siteSlug = (scopeKey || '').toLowerCase().replace(/ /g, '-');
+						spaNavigate(Liferay.ThemeDisplay.getPathFriendlyURLPublic() + '/' + siteSlug + '/c_forumthread/' + friendlyUrlPath);
 					});
 				})
 				.catch(function(err) {
@@ -961,23 +969,23 @@ if (messageComposer) {
 	   platform's own DefaultMentionsMatcher.
 	   --------------------------------------------------------------------- */
 	(function setupMentions() {
-		var MENTION_MAX = 6;
-		var mentionAttached = false;
+		const MENTION_MAX = 6;
+		let mentionAttached = false;
 
 		/* The OOTB Mentions portlet, embedded as an on-page widget. Its
 		   resource params are namespaced with "_<portletId>_". The finder
 		   permission-scopes its candidate list against a "discussion portlet";
 		   the page comments portlet is a sensible default and mirrors how OOTB
 		   comment mentions are scoped. */
-		var MENTIONS_ID = 'com_liferay_mentions_web_portlet_MentionsPortlet';
-		var MENTIONS_NS = '_' + MENTIONS_ID + '_';
-		var MENTIONS_DISCUSSION_PORTLET_ID =
+		const MENTIONS_ID = 'com_liferay_mentions_web_portlet_MentionsPortlet';
+		const MENTIONS_NS = '_' + MENTIONS_ID + '_';
+		const MENTIONS_DISCUSSION_PORTLET_ID =
 			'com_liferay_comment_page_comments_web_portlet_PageCommentsPortlet';
 
 		/* Track every global/document listener added below so they can all be
 		   removed on SPA navigation; otherwise each visit to this fragment would
 		   leave behind orphaned listeners (and dropdowns) that accumulate. */
-		var cleanups = [];
+		let cleanups = [];
 		function addListener(target, type, handler, options) {
 			target.addEventListener(type, handler, options);
 			cleanups.push(function() {
@@ -988,22 +996,22 @@ if (messageComposer) {
 		/* Reuse a single dropdown per fragment instance: remove any stale one
 		   left by a prior render before creating a fresh one, so they don't
 		   stack up in the document body across SPA transitions. */
-		var dropdownId = fragmentElementId + '-forumsMentionDropdown';
-		var staleDropdown = document.getElementById(dropdownId);
+		const dropdownId = fragmentElementId + '-forumsMentionDropdown';
+		const staleDropdown = document.getElementById(dropdownId);
 		if (staleDropdown) staleDropdown.remove();
 
-		var dropdown = document.createElement('div');
+		const dropdown = document.createElement('div');
 		dropdown.id = dropdownId;
 		dropdown.className = 'forums-mention-dropdown';
 		dropdown.style.display = 'none';
 		dropdown.setAttribute('role', 'listbox');
 		document.body.appendChild(dropdown);
 
-		var activeIndex = -1;
-		var currentItems = [];
-		var currentQuery = null;    /* the text typed after "@" (may be "") */
-		var fetchTimer = null;
-		var lastReqId = 0;
+		let activeIndex = -1;
+		let currentItems = [];
+		let currentQuery = null;    /* the text typed after "@" (may be "") */
+		let fetchTimer = null;
+		let lastReqId = 0;
 
 		function mentionDisplayName(u) {
 			return u.fullName || u.screenName || '';
@@ -1013,9 +1021,10 @@ if (messageComposer) {
 		   read the DOM selection inside it (works for both editor versions;
 		   CKEditor 4 may host the editable inside an iframe). */
 		function getEditableEl(editor) {
-			if (editor.editing && editor.editing.view &&
-				typeof editor.editing.view.getDomRoot === 'function') {
-				return editor.editing.view.getDomRoot();   /* CKEditor 5 */
+			const {editing} = editor;
+			if (editing && editing.view &&
+				typeof editing.view.getDomRoot === 'function') {
+				return editing.view.getDomRoot();   /* CKEditor 5 */
 			}
 			if (typeof editor.editable === 'function' && editor.editable()) {
 				return editor.editable().$;                 /* CKEditor 4 */
@@ -1024,11 +1033,11 @@ if (messageComposer) {
 		}
 
 		function frameOffset(editableEl) {
-			var win = editableEl.ownerDocument.defaultView;
-			var frameEl = win && win.frameElement;
+			const win = editableEl.ownerDocument.defaultView;
+			const frameEl = win && win.frameElement;
 			if (frameEl) {
-				var r = frameEl.getBoundingClientRect();
-				return { x: r.left, y: r.top };
+				const {left: x, top: y} = frameEl.getBoundingClientRect();
+				return { x, y };
 			}
 			return { x: 0, y: 0 };
 		}
@@ -1043,14 +1052,17 @@ if (messageComposer) {
 		   searches once a screen-name character is typed. The first character is
 		   alphanumeric; later ones may include the punctuation "." "-" "_". */
 		function detectQuery(editableEl) {
-			var doc = editableEl.ownerDocument;
-			var sel = doc.getSelection();
-			if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
-			var node = sel.anchorNode;
-			if (!node || node.nodeType !== 3) return null;
-			var before = node.textContent.slice(0, sel.anchorOffset);
-			var m = before.match(/(?:^|[\s (\[])@([a-zA-Z0-9][\w.\-]{0,29})$/);
-			return m ? m[1] : null;
+			const doc = editableEl.ownerDocument;
+			const sel = doc.getSelection();
+			if (!sel) return null;
+			const {anchorNode, anchorOffset, isCollapsed, rangeCount} = sel;
+			if (rangeCount === 0 || !isCollapsed) return null;
+			if (!anchorNode || anchorNode.nodeType !== 3) return null;
+			const before = anchorNode.textContent.slice(0, anchorOffset);
+			const m = before.match(/(?:^|[\s (\[])@([a-zA-Z0-9][\w.\-]{0,29})$/);
+			if (!m) return null;
+			const [, query] = m;
+			return query;
 		}
 
 		function hideDropdown() {
@@ -1061,21 +1073,21 @@ if (messageComposer) {
 		}
 
 		function positionDropdown(editableEl) {
-			var doc = editableEl.ownerDocument;
-			var sel = doc.getSelection();
+			const doc = editableEl.ownerDocument;
+			const sel = doc.getSelection();
 			if (!sel || sel.rangeCount === 0) return;
-			var rect = sel.getRangeAt(0).getBoundingClientRect();
-			var off = frameOffset(editableEl);
-			var top = rect.bottom + off.y;
-			var left = rect.left + off.x;
+			const rect = sel.getRangeAt(0).getBoundingClientRect();
+			const {x, y} = frameOffset(editableEl);
+			let top = rect.bottom + y;
+			let left = rect.left + x;
 			if (!rect.height && !rect.width) {
 				/* Some browsers return an empty rect for a collapsed caret;
 				   fall back to the editable's top-left. */
-				var er = editableEl.getBoundingClientRect();
-				top = er.top + off.y + 24;
-				left = er.left + off.x + 8;
+				const er = editableEl.getBoundingClientRect();
+				top = er.top + y + 24;
+				left = er.left + x + 8;
 			}
-			var maxLeft = window.innerWidth - dropdown.offsetWidth - 8;
+			const maxLeft = window.innerWidth - dropdown.offsetWidth - 8;
 			dropdown.style.top = Math.round(top + 4) + 'px';
 			dropdown.style.left = Math.round(Math.max(8, Math.min(left, maxLeft))) + 'px';
 		}
@@ -1091,16 +1103,17 @@ if (messageComposer) {
 				return;
 			}
 
-			var html = '';
+			let html = '';
 			currentItems.forEach(function(u, i) {
 				/* fullName and screenName arrive already HTML-escaped from the
 				   Mentions portlet; insert them as-is (re-escaping would render
 				   visible entities). portraitHTML is ready-to-render markup. */
-				var name = mentionDisplayName(u);
-				var screen = u.screenName ? ('@' + u.screenName) : '';
-				var initial = (name || '?').charAt(0).toUpperCase();
-				var avatar = u.portraitHTML
-					? u.portraitHTML
+				const {portraitHTML, screenName} = u;
+				const name = mentionDisplayName(u);
+				const screen = screenName ? ('@' + screenName) : '';
+				const initial = (name || '?').charAt(0).toUpperCase();
+				const avatar = portraitHTML
+					? portraitHTML
 					: '<span class="sticker sticker-circle sticker-sm sticker-outline-' + (i % 10) + '"><span class="sticker-overlay">' + Liferay.Util.escapeHTML(initial) + '</span></span>';
 				html += '<button type="button" role="option" class="forums-mention-dropdown__item' +
 					(i === activeIndex ? ' is-active' : '') + '" data-mention-index="' + i + '"' +
@@ -1118,21 +1131,21 @@ if (messageComposer) {
 		}
 
 		function searchUsers(query, editableEl) {
-			var reqId = ++lastReqId;
+			const reqId = ++lastReqId;
 			/* Invoke the embedded Mentions portlet's serveResource. The base is
 			   the current layout URL; because the portlet is on this page, no
 			   p_p_auth token is needed. Resource params are namespaced. The
 			   finder is Social Interactions-scoped and already excludes the
 			   current user and guests, so no client-side self-filtering. */
-			var base = Liferay.ThemeDisplay.getLayoutRelativeURL() ||
+			const base = Liferay.ThemeDisplay.getLayoutRelativeURL() ||
 				window.location.pathname;
-			var url = base +
+			const url = base +
 				'?p_p_id=' + MENTIONS_ID +
 				'&p_p_lifecycle=2' +
 				'&p_p_state=exclusive' +
 				'&' + MENTIONS_NS + 'discussionPortletId=' + encodeURIComponent(MENTIONS_DISCUSSION_PORTLET_ID) +
 				'&' + MENTIONS_NS + 'query=' + encodeURIComponent(query || '');
-			Liferay.Util.fetch(url, { headers: headers, method: 'GET' })
+			Liferay.Util.fetch(url, { headers, method: 'GET' })
 				.then(function(r) { return r.json(); })
 				.then(function(data) {
 					if (reqId !== lastReqId || currentQuery === null) return;
@@ -1157,24 +1170,25 @@ if (messageComposer) {
 			   "lfr-ac-content" span for chip styling; CKEditor 5 drops unknown
 			   spans on serialization, so it gets the bare token (still fully
 			   resolvable). screenName is already HTML-escaped by the portlet. */
-			var screenName = user.screenName || '';
+			const screenName = user.screenName || '';
 			if (!screenName) { hideDropdown(); return; }
-			var label = '@' + screenName;
-			var query = currentQuery || '';
-			var removeLen = query.length + 1; /* the "@" plus the typed query */
+			const label = '@' + screenName;
+			const query = currentQuery || '';
+			const removeLen = query.length + 1; /* the "@" plus the typed query */
 
-			if (editor.model && editor.editing) {
+			const {editing, model} = editor;
+			if (model && editing) {
 				/* CKEditor 5: delete "@query" then insert the plain token + space
 				   (no link -- the mention is a text token, not a hyperlink). */
 				try {
-					editor.model.change(function(writer) {
-						var pos = editor.model.document.selection.getFirstPosition();
-						var startPos = pos.getShiftedBy(-removeLen);
+					model.change(function(writer) {
+						const pos = model.document.selection.getFirstPosition();
+						const startPos = pos.getShiftedBy(-removeLen);
 						writer.remove(writer.createRange(startPos, pos));
-						editor.model.insertContent(
+						model.insertContent(
 							writer.createText(label), startPos);
-						var afterPos = startPos.getShiftedBy(label.length);
-						editor.model.insertContent(writer.createText(' '), afterPos);
+						const afterPos = startPos.getShiftedBy(label.length);
+						model.insertContent(writer.createText(' '), afterPos);
 						writer.setSelection(afterPos.getShiftedBy(1));
 					});
 				} catch (e) { console.warn('mention insert (v5) failed', e); }
@@ -1182,8 +1196,8 @@ if (messageComposer) {
 				/* CKEditor 4: extend the range back over "@query", replace with
 				   the OOTB lfr-ac-content span. label is already HTML-escaped. */
 				try {
-					var sel = editor.getSelection();
-					var range = sel.getRanges()[0];
+					const sel = editor.getSelection();
+					const [range] = sel.getRanges();
 					if (range && range.startOffset >= removeLen) {
 						range.setStart(range.startContainer, range.startOffset - removeLen);
 						range.select();
@@ -1202,7 +1216,7 @@ if (messageComposer) {
 		}
 
 		function onActivity(editor, editableEl) {
-			var q = detectQuery(editableEl);
+			const q = detectQuery(editableEl);
 			if (q === null) { hideDropdown(); return; }
 			currentQuery = q;
 			if (fetchTimer) clearTimeout(fetchTimer);
@@ -1211,7 +1225,7 @@ if (messageComposer) {
 
 		function attach(editor) {
 			if (mentionAttached) return;
-			var editableEl = getEditableEl(editor);
+			const editableEl = getEditableEl(editor);
 			if (!editableEl) return;
 			mentionAttached = true;
 
@@ -1255,10 +1269,10 @@ if (messageComposer) {
 		/* Mouse selection from the dropdown. mousedown (not click) so it fires
 		   before the editable's blur hides the list. */
 		dropdown.addEventListener('mousedown', function(e) {
-			var btn = e.target.closest('[data-mention-index]');
+			const btn = e.target.closest('[data-mention-index]');
 			if (!btn) return;
 			e.preventDefault();
-			var idx = parseInt(btn.getAttribute('data-mention-index'), 10);
+			const idx = parseInt(btn.getAttribute('data-mention-index'), 10);
 			if (bodyEditorInstance) choose(bodyEditorInstance, getEditableEl(bodyEditorInstance), idx);
 		});
 

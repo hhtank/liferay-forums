@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-var relatedTopics = fragmentElement.querySelector('#forumsRelatedTopics');
+const relatedTopics = fragmentElement.querySelector('#forumsRelatedTopics');
 
 if (relatedTopics && !document.body.classList.contains('has-edit-mode-menu')) {
-	var portalURL = Liferay.ThemeDisplay.getPortalURL();
-	var scopeGroupId = Liferay.ThemeDisplay.getScopeGroupId();
-	var headers = {
+	const portalURL = Liferay.ThemeDisplay.getPortalURL();
+	const scopeGroupId = Liferay.ThemeDisplay.getScopeGroupId();
+	const headers = {
 		'Accept': 'application/json',
 		'Content-Type': 'application/json'
 	};
 
-	var listEl = relatedTopics.querySelector('#forumsRelatedTopicsList');
-	var loadingEl = relatedTopics.querySelector('#forumsRelatedTopicsLoading');
+	const listEl = relatedTopics.querySelector('#forumsRelatedTopicsList');
+	const loadingEl = relatedTopics.querySelector('#forumsRelatedTopicsLoading');
 
 	/* URL params */
-	var urlParams = new URLSearchParams(window.location.search);
-	var currentMessageId = urlParams.get('messageId');
+	const urlParams = new URLSearchParams(window.location.search);
+	let currentMessageId = urlParams.get('messageId');
 
 	function runRelatedTopics(resolvedMessageId) {
 		currentMessageId = resolvedMessageId;
@@ -27,32 +27,32 @@ if (relatedTopics && !document.body.classList.contains('has-edit-mode-menu')) {
 
 	/* First, get the current message to find its category */
 	Liferay.Util.fetch(portalURL + '/o/c/forumthreads/' + currentMessageId, {
-		headers: headers,
+		headers,
 		method: 'GET'
 	})
 	.then(function(r) { return r.json(); })
 	.then(function(msg) {
-		var categoryId = msg.r_categoryThreads_c_forumCategoryId;
+		const categoryId = msg.r_categoryThreads_c_forumCategoryId;
 
 		/* Fetch other messages from the same category */
-		var filterParts = [];
+		const filterParts = [];
 		if (categoryId) {
 			filterParts.push('r_categoryThreads_c_forumCategoryId eq \'' + categoryId + '\'');
 		}
 
-		var url = portalURL + '/o/c/forumthreads/scopes/' + scopeGroupId + '?pageSize=6&sort=lastPostDate:desc&nestedFields=threadSuspiciousActivities';
+		let url = portalURL + '/o/c/forumthreads/scopes/' + scopeGroupId + '?pageSize=6&sort=lastPostDate:desc&nestedFields=threadSuspiciousActivities';
 		if (filterParts.length > 0) {
 			url += '&filter=' + encodeURIComponent(filterParts.join(' and '));
 		}
 
-		return Liferay.Util.fetch(url, { headers: headers, method: 'GET' });
+		return Liferay.Util.fetch(url, { headers, method: 'GET' });
 	})
 	.then(function(r) { return r.json(); })
 	.then(function(data) {
 		if (loadingEl) loadingEl.remove();
 
-		var items = (data.items || []).filter(function(t) {
-			return String(t.id) !== String(currentMessageId);
+		const items = (data.items || []).filter(function({id}) {
+			return String(id) !== String(currentMessageId);
 		}).slice(0, 5);
 
 		if (items.length === 0) {
@@ -60,28 +60,28 @@ if (relatedTopics && !document.body.classList.contains('has-edit-mode-menu')) {
 			return;
 		}
 
-		var html = '';
-		var missingDisplayPage = false;
-		items.forEach(function(msg) {
-			var title = msg.messageTitle || relatedTopics.dataset.labelUntitled || 'Untitled';
-			var isFlagged = false;
-			var suspiciousActivities = msg.threadSuspiciousActivities || [];
-			for (var s = 0; s < suspiciousActivities.length; s++) {
-				if (suspiciousActivities[s].validated === true) {
+		let html = '';
+		let missingDisplayPage = false;
+		items.forEach(function({messageTitle, threadSuspiciousActivities, friendlyUrlPath, scopeKey}) {
+			const title = messageTitle || relatedTopics.dataset.labelUntitled || 'Untitled';
+			let isFlagged = false;
+			const suspiciousActivities = threadSuspiciousActivities || [];
+			for (const {validated} of suspiciousActivities) {
+				if (validated === true) {
 					isFlagged = true;
 					break;
 				}
 			}
 
-			var flaggedBadge = '';
+			let flaggedBadge = '';
 			if (isFlagged) {
-				var flaggedText = relatedTopics.dataset.labelFlagged || 'Flagged';
+				const flaggedText = relatedTopics.dataset.labelFlagged || 'Flagged';
 				flaggedBadge = '<span class="text-danger ml-2" style="font-size:0.85em"><svg class="lexicon-icon lexicon-icon-warning-full" role="presentation" viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M16 14.5L8 1 0 14.5h16zM8 13c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm1-3H7V6h2v4z"/></svg> ' + flaggedText + '</span>';
 			}
 
-			if (msg.friendlyUrlPath) {
-				var siteSlug = (msg.scopeKey || '').toLowerCase().replace(/ /g, '-');
-				var messageHref = Liferay.ThemeDisplay.getPathFriendlyURLPublic() + '/' + siteSlug + '/c_forumthread/' + msg.friendlyUrlPath;
+			if (friendlyUrlPath) {
+				const siteSlug = (scopeKey || '').toLowerCase().replace(/ /g, '-');
+				const messageHref = Liferay.ThemeDisplay.getPathFriendlyURLPublic() + '/' + siteSlug + '/c_forumthread/' + friendlyUrlPath;
 				html += '<a href="' + messageHref + '" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">'
 					+ '<span>' + Liferay.Util.escapeHTML(title) + '</span>' + flaggedBadge + '</a>';
 			} else {
@@ -112,13 +112,13 @@ if (relatedTopics && !document.body.classList.contains('has-edit-mode-menu')) {
 		runRelatedTopics(currentMessageId);
 	} else {
 		/* Reply ERC takes priority — set when this fragment is on a Forum Message Display Page */
-		var replyErcEl = relatedTopics.querySelector('#forumsRelatedTopicsReplyERC');
-		var replyErc = replyErcEl ? replyErcEl.textContent.trim() : null;
+		const replyErcEl = relatedTopics.querySelector('#forumsRelatedTopicsReplyERC');
+		let replyErc = replyErcEl ? replyErcEl.textContent.trim() : null;
 		if (replyErc === 'Mappable Reply ERC') replyErc = null;
 
 		if (replyErc) {
 			Liferay.Util.fetch(portalURL + '/o/c/forummessages/scopes/' + scopeGroupId + '/by-external-reference-code/' + encodeURIComponent(replyErc), {
-				headers: headers,
+				headers,
 				method: 'GET'
 			})
 			.then(function(r) {
@@ -126,13 +126,13 @@ if (relatedTopics && !document.body.classList.contains('has-edit-mode-menu')) {
 				return r.json();
 			})
 			.then(function(reply) {
-				var parentMessageId = reply.r_threadMessages_c_forumThreadId;
+				const parentMessageId = reply.r_threadMessages_c_forumThreadId;
 				runRelatedTopics(parentMessageId ? String(parentMessageId) : null);
 			})
 			.catch(function() { runRelatedTopics(null); });
 		} else {
-			var ercEl = relatedTopics.querySelector('#forumsRelatedTopicsERC');
-			var erc = ercEl ? ercEl.textContent.trim() : null;
+			const ercEl = relatedTopics.querySelector('#forumsRelatedTopicsERC');
+			let erc = ercEl ? ercEl.textContent.trim() : null;
 			if (erc === 'Mappable Message ERC') erc = null;
 
 			if (!erc) {
@@ -140,7 +140,7 @@ if (relatedTopics && !document.body.classList.contains('has-edit-mode-menu')) {
 				listEl.innerHTML = '<div class="text-secondary text-center py-2">' + (relatedTopics.dataset.labelErcNotMapped || 'Message ERC is not mapped.') + '</div>';
 			} else {
 				Liferay.Util.fetch(portalURL + '/o/c/forumthreads/scopes/' + scopeGroupId + '/by-external-reference-code/' + encodeURIComponent(erc), {
-					headers: headers,
+					headers,
 					method: 'GET'
 				})
 				.then(function(r) {
