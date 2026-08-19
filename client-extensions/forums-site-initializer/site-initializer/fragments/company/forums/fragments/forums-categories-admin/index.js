@@ -54,6 +54,13 @@ if (forumsCategoriesAdmin) {
 		{ name: category5Name, desc: category5Desc, erc: category5ERC }
 	].filter(function({name}) { return name; });
 
+	/* Alphabetical by localized name, tolerant of a missing translation. */
+	function sortByCategoryName(items) {
+		return items.slice().sort(function(a, b) {
+			return String(a.categoryName || '').localeCompare(String(b.categoryName || ''));
+		});
+	}
+
 	/* --- Hierarchy helpers ---------------------------------------------- */
 
 	function getParentId(cat) {
@@ -124,7 +131,7 @@ if (forumsCategoriesAdmin) {
 		if (loadingEl) loadingEl.style.display = 'block';
 		listEl.innerHTML = '';
 
-		Liferay.Util.fetch(portalURL + '/o/c/forumcategories/scopes/' + scopeGroupId + '?pageSize=100&sort=categoryName:asc', {
+		Liferay.Util.fetch(portalURL + '/o/c/forumcategories/scopes/' + scopeGroupId + '?pageSize=100', {
 			headers,
 			method: 'GET'
 		})
@@ -150,7 +157,9 @@ if (forumsCategoriesAdmin) {
 				return;
 			}
 
-			const items = data.items || [];
+			/* categoryName is localized: sorting it server-side generates an ORDER
+			   BY CASE with untyped parameters that HSQLDB rejects, so order here. */
+			const items = sortByCategoryName(data.items || []);
 			const tree = buildTree(items);
 
 			/* Refresh the add-form parent picker with the current tree */

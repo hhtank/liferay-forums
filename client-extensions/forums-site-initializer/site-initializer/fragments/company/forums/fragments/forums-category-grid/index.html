@@ -9,7 +9,11 @@
 	generous page so child counts can be computed, then cap the rendered cards
 	at the configured page size.
 --]
-[#assign categoriesData = restClient.get("/c/forumcategories/scopes/" + scopeGroupId + "?pageSize=200&sort=categoryName:asc")!"" /]
+[#--
+	categoryName is a localized field: sorting it server-side generates an
+	ORDER BY CASE with untyped parameters that HSQLDB rejects, so order here.
+--]
+[#assign categoriesData = restClient.get("/c/forumcategories/scopes/" + scopeGroupId + "?pageSize=200")!"" /]
 [#assign baseHref = (themeDisplay.getPathFriendlyURLPublic()!"") + (scopeGroup.getFriendlyURL()!"") + (configuration.messagesURL!"/forums-messages") /]
 [#assign categoryIcons = {
 	"Best Practices": "star",
@@ -27,12 +31,18 @@
 		<div class="justify-content-center row">
 			[#assign shown = 0 /]
 			[#if categoriesData?is_hash && categoriesData.items?has_content]
-				[#list categoriesData.items as cat]
+				[#assign categories = categoriesData.items /]
+				[#attempt]
+					[#assign categories = categories?sort_by("categoryName") /]
+				[#recover]
+					[#-- A category with no name in this locale keeps source order. --]
+				[/#attempt]
+				[#list categories as cat]
 					[#assign parentId = (cat["r_categorySubcategories_c_forumCategoryId"]!0) /]
 					[#if parentId == 0 && shown < maxCards]
 						[#assign shown = shown + 1 /]
 						[#assign subCount = 0 /]
-						[#list categoriesData.items as child]
+						[#list categories as child]
 							[#if (child["r_categorySubcategories_c_forumCategoryId"]!0) == cat.id]
 								[#assign subCount = subCount + 1 /]
 							[/#if]

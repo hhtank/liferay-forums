@@ -534,18 +534,27 @@ if (messageComposer) {
 		}
 	}
 
+	/* Alphabetical by localized name, tolerant of a missing translation. */
+	function sortByCategoryName(items) {
+		return items.slice().sort(function(a, b) {
+			return String(a.categoryName || '').localeCompare(String(b.categoryName || ''));
+		});
+	}
+
 	/* Load categories into dropdown (only once) */
 	function loadCategories() {
 		if (categoriesLoaded) return;
 		categoriesLoaded = true;
 
-		Liferay.Util.fetch(portalURL + '/o/c/forumcategories/scopes/' + scopeGroupId + '?pageSize=50&sort=categoryName:asc', {
+		Liferay.Util.fetch(portalURL + '/o/c/forumcategories/scopes/' + scopeGroupId + '?pageSize=50', {
 			headers,
 			method: 'GET'
 		})
 		.then(function(r) { return r.json(); })
 		.then(function(data) {
-			const items = data.items || [];
+			/* categoryName is localized: sorting it server-side generates an ORDER
+			   BY CASE with untyped parameters that HSQLDB rejects, so order here. */
+			const items = sortByCategoryName(data.items || []);
 
 			/* Group subcategories under their parent so the structure is
 			   visible. Posting into a parent stays valid — a parent lists only

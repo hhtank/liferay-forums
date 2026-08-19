@@ -239,6 +239,13 @@ if (messageList) {
 		return window.location.pathname + '?categoryId=' + id;
 	}
 
+	/* Alphabetical by localized name, tolerant of a missing translation. */
+	function sortByCategoryName(items) {
+		return items.slice().sort(function(a, b) {
+			return String(a.categoryName || '').localeCompare(String(b.categoryName || ''));
+		});
+	}
+
 	/* Build {byId, childrenOf} from a flat list. Anything deeper than
 	   MAX_DEPTH — only reachable by writing the FK directly through the REST
 	   API — is normalized to top-level so it still renders somewhere. */
@@ -463,13 +470,15 @@ if (messageList) {
 
 	/* One fetch drives the breadcrumb, the filter dropdown and the
 	   subcategory cards. */
-	Liferay.Util.fetch(portalURL + '/o/c/forumcategories/scopes/' + scopeGroupId + '?pageSize=200&sort=categoryName:asc', {
+	Liferay.Util.fetch(portalURL + '/o/c/forumcategories/scopes/' + scopeGroupId + '?pageSize=200', {
 		headers,
 		method: 'GET'
 	})
 	.then(function(r) { return r.json(); })
 	.then(function(data) {
-		categoryTree = buildTree(data.items || []);
+		/* categoryName is localized: sorting it server-side generates an ORDER BY
+		   CASE with untyped parameters that HSQLDB rejects, so order here. */
+		categoryTree = buildTree(sortByCategoryName(data.items || []));
 
 		buildBreadcrumb(categoryTree);
 		populateCategoryFilter(categoryTree);
