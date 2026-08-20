@@ -88,7 +88,7 @@ Run these in order. Steps 1–5 are order-dependent: the feature flags gate Obje
 | 4 | Deploy the [Forums Microservice](#forums-microservice-client-extension) — `lcp deploy` on PaaS, or copy `forums-microservice.zip` to `$LIFERAY_HOME/deploy` locally | both |
 | 5 | Create the site, choosing the **Forums** site initializer | both |
 | 6 | Start the microservice: `cd client-extensions/forums-microservice && ./run-local.sh` | local |
-| 7 | [Replace the two imported `ForumMessage` actions with webhooks](#binding-the-object-actions-locally) | local |
+| 7 | [Bind the two imported `ForumMessage` actions](#binding-the-object-actions-locally) | local |
 | 8 | [Demo data](#demo-data) scripts 1–5, in numeric order | optional |
 
 > **Skipping step 4 fails silently.** Without the microservice client extension nothing calls the notification handlers: replies are created normally, no error is logged, and no notification is ever sent. The object definitions, notification templates and all four object actions arrive automatically from the site initializer — only the webhook swap in step 7 is manual, and only on a local bundle.
@@ -307,7 +307,7 @@ The `setup/demo/` directory contains scripts for populating a development enviro
 ### Step 1 — Create demo data
 
 ```bash
-python3 setup/demo/1-create-demo-data.py <siteId> [BASE_URL] [--email EMAIL] [--password PASSWORD]
+python3 setup/demo/1-create-demo-data.py [BASE_URL] <siteId> [--email EMAIL] [--password PASSWORD]
 ```
 
 Creates the four default top-level Forum Categories plus two subcategories under **Technical Help** (by ERC if they do not already exist), a set of demo user accounts assigned the Site Member role with profile photos, Forum Threads with keywords distributed across those categories, and replies to each message. Categories are created in two passes — parents first, then children — so each subcategory's parent id is resolvable. All content is created as the admin user; authorship is corrected in Step 2.
@@ -472,20 +472,14 @@ On PaaS/SaaS the `objectAction` client extension registers an executor and Lifer
 No object action executor found with company ID <id> and key liferay-forumsmicroservice-object-action-new-reply
 ```
 
-The site initializer ships both actions ([`forum-message.object-actions.json`](client-extensions/forums-site-initializer/site-initializer/object-actions/forum-message.object-actions.json)) bound to the client-extension executor, which is correct for PaaS/SaaS. Locally you must **replace** them — delete `ForumMessageNewReply` and `ForumMessageUpdatedReply`, then recreate them as plain **webhooks** (Control Panel → Objects → ForumMessage → Actions):
+The site initializer ships both actions ([`forum-message.object-actions.json`](client-extensions/forums-site-initializer/site-initializer/object-actions/forum-message.object-actions.json)) bound to the client-extension executor, which is correct for PaaS/SaaS. Locally you have to **bind** them manually (Control Panel → Objects → ForumMessage → Actions):
 
-| Trigger | Executor | URL |
-| :--- | :--- | :--- |
-| On After Add | Webhook | `http://localhost:58082/object-action/new-reply` |
-| On After Update | Webhook | `http://localhost:58082/object-action/updated-reply` |
-
-Leaving the imported versions in place is what produces the error above on every reply; adding webhooks *alongside* them would fire each handler twice.
+| Trigger | Action |
+| :--- | :--- |
+| On After Add | `object-action-executor[function#liferay-forumsmicroservice-object-action-new-reply]` |
+| On After Update | `object-action-executor[function#liferay-forumsmicroservice-object-action-updated-reply]` |
 
 Verify with `GET /o/notification/v1.0/notification-queue-entries` after a reply: two rows should appear for that subject, one `type=email` and one `type=userNotification`. If none do, `grep "No object action executor found"` in the portal log distinguishes "the trigger never fired" from a failure further down; the microservice log covers the rest.
-
-A webhook carries no JWT, so `run-local.sh` activates the **`local` Spring profile** ([`application-local.properties`](client-extensions/forums-microservice/src/main/resources/application-local.properties)), which adds the two object-action paths to `liferay.oauth.urls.excludes`. The handlers treat the JWT as optional and fall back to the configured Basic Auth credentials for their own outbound calls.
-
-> This loosening is **local-only**. `application-default.properties` — the profile PaaS/SaaS runs — excludes only `/ready`, leaving the object-action endpoints behind OAuth2. Verified by running the jar under each profile: `default` returns `401` on an unauthenticated object-action POST, `default,local` returns `200`.
 
 ##### Upgrading an environment built before the Objects switch
 
